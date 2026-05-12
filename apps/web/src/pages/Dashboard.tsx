@@ -24,6 +24,7 @@ import {
   YAxis,
 } from "recharts";
 import { DashboardResponse, sentimentApi } from "@/lib/api";
+import { DataManagementModal } from "@/components/DataManagementModal";
 
 const COLORS = ["#0f766e", "#ea580c", "#0ea5e9", "#16a34a", "#db2777", "#7c3aed"];
 
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
 
   async function loadDashboard() {
     setLoading(true);
@@ -101,6 +103,7 @@ export default function Dashboard() {
           <button onClick={() => setIsDataModalOpen(true)} className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30">
             Gerenciar Dados
           </button>
+          <button onClick={() => setIsDataModalOpen(true)} className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30">Gerenciar Dados</button>
           <button onClick={() => setLocation("/search")} className="secondary-btn">
             {t("dashboard.newSearch")}
           </button>
@@ -209,6 +212,12 @@ export default function Dashboard() {
           </section>
         </>
       )}
+
+      <DataManagementModal
+        isOpen={isDataModalOpen}
+        onClose={() => setIsDataModalOpen(false)}
+        onDataDeleted={loadDashboard}
+      />
     </AppShell>
   );
 }
