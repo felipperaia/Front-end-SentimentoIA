@@ -1,6 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { BrandMark } from "@/components/BrandMark";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { Brain, FileText, LayoutDashboard, LogOut, Search, Settings2 } from "lucide-react";
+import { Brain, FileText, LayoutDashboard, LogOut, Search, Settings2, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 
@@ -14,7 +16,7 @@ type ShellProps = {
 type MenuItem = {
   path: string;
   label: string;
-  icon: typeof Search;
+  icon: LucideIcon;
 };
 
 export function AppShell({ title, subtitle, actions, children }: ShellProps) {
@@ -36,8 +38,8 @@ export function AppShell({ title, subtitle, actions, children }: ShellProps) {
         <div className="container py-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
-              <div className="brand-pill">SentimentoIA</div>
-              <p className="hidden text-sm text-muted-foreground md:block">Inteligencia de reputacao com IA</p>
+              <BrandMark size="md" />
+              <p className="hidden text-sm text-muted-foreground md:block">{t("common.productLine")}</p>
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
               {menuItems.map((item) => {
@@ -45,6 +47,7 @@ export function AppShell({ title, subtitle, actions, children }: ShellProps) {
                 return (
                   <button
                     key={item.path}
+                    type="button"
                     onClick={() => setLocation(item.path)}
                     className={`shell-nav-btn ${active ? "shell-nav-btn-active" : ""}`}
                   >
@@ -53,7 +56,8 @@ export function AppShell({ title, subtitle, actions, children }: ShellProps) {
                   </button>
                 );
               })}
-              <button onClick={logout} className="shell-nav-btn text-rose-600">
+              <LanguageSelector compact className="shrink-0" />
+              <button type="button" onClick={logout} className="shell-nav-btn text-rose-600">
                 <LogOut size={16} />
                 <span>{t("nav.logout")}</span>
               </button>

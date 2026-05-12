@@ -1,13 +1,13 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import { AuthLayout } from "@/components/AuthLayout";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { authApi, getToken } from "@/lib/api";
+import { AlertCircle, CheckCircle2, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { authApi, getToken } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AlertCircle, CheckCircle, Shield } from "lucide-react";
 
 export default function MFAVerify() {
+  const { t } = useAppSettings();
   const [, setLocation] = useLocation();
   const { isAuthenticated, loading: authLoading } = useAuth({
     redirectOnUnauthenticated: true,
@@ -25,21 +25,21 @@ export default function MFAVerify() {
     }
   }, [authLoading, isAuthenticated, setLocation]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replaceAll(/\D/g, "").slice(0, 6);
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value.replaceAll(/\D/g, "").slice(0, 6);
     setCode(value);
     if (error) setError("");
   };
 
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (code.length !== 6) {
-      setError("Código deve ter 6 dígitos");
+      setError(t("mfa.codeLength"));
       return;
     }
 
     if (!getToken()) {
-      setError("Sessão expirada. Faça login novamente.");
+      setError(t("mfa.sessionExpired"));
       setLocation("/login");
       return;
     }
@@ -51,78 +51,66 @@ export default function MFAVerify() {
       setTimeout(() => setLocation("/search"), 1200);
     } catch (err) {
       setCode("");
-      setError(err instanceof Error ? err.message : "Erro ao verificar código");
+      setError(err instanceof Error ? err.message : t("mfa.error"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute inset-0" style={{
-          backgroundImage: "linear-gradient(0deg, transparent 24%, rgba(0, 255, 255, 0.05) 25%, rgba(0, 255, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, 0.05) 75%, rgba(0, 255, 255, 0.05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(0, 255, 255, 0.05) 25%, rgba(0, 255, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, 0.05) 75%, rgba(0, 255, 255, 0.05) 76%, transparent 77%, transparent)",
-          backgroundSize: "50px 50px"
-        }} />
-      </div>
-
-      <div className="relative z-10 w-full max-w-md">
-        <div className="border-2 border-cyan-500 bg-black/50 backdrop-blur-sm p-8 relative">
-          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-pink-500" />
-          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-pink-500" />
-          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-pink-500" />
-          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-pink-500" />
-
-          <div className="flex justify-center mb-4">
-            <Shield className="w-12 h-12 text-pink-500" style={{ filter: "drop-shadow(0 0 10px rgba(255, 0, 255, 0.8))" }} />
-          </div>
-
-          <h1 className="text-3xl font-bold text-pink-500 mb-2 text-center font-mono tracking-widest" style={{ textShadow: "0 0 10px rgba(255, 0, 255, 0.8)" }}>
-            VERIFICAÇÃO MFA
-          </h1>
-          <p className="text-cyan-400 text-center mb-6 text-sm font-mono">Digite o código de 6 dígitos do seu autenticador</p>
-
-          {success && (
-            <div className="mb-4 p-3 bg-green-900/20 border border-green-500 rounded flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className="text-green-400 text-sm">Verificação bem-sucedida!</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label className="text-cyan-400 font-mono text-xs mb-2 block">CÓDIGO AUTENTICADOR</Label>
-              <Input
-                type="text"
-                value={code}
-                onChange={handleChange}
-                placeholder="000000"
-                maxLength={6}
-                className="bg-black/50 border border-cyan-500 text-white placeholder-gray-600 focus:border-pink-500 focus:outline-none font-mono text-2xl text-center tracking-widest"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-900/20 border border-red-500 rounded flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-red-500" />
-                <span className="text-red-400 text-sm">{error}</span>
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={loading || code.length !== 6}
-              className="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-2 px-4 font-mono tracking-wider disabled:opacity-50"
-            >
-              {loading ? "VERIFICANDO..." : "VERIFICAR"}
-            </Button>
-          </form>
-
-          <p className="text-center text-cyan-400 text-xs mt-4 font-mono">
-            Use o código atual do seu aplicativo autenticador vinculado.
-          </p>
+    <AuthLayout title={t("mfa.title")} subtitle={t("mfa.subtitle")}>
+      <div className="mb-6 flex justify-center">
+        <div className="rounded-full border border-border bg-accent p-3 text-[color:var(--brand)]">
+          <Shield className="h-7 w-7" />
         </div>
       </div>
-    </div>
+
+      {success ? (
+        <div className="mb-5 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{t("mfa.success")}</span>
+          </div>
+        </div>
+      ) : null}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label className="field-label" htmlFor="mfa-code">
+            {t("mfa.codeLabel")}
+          </label>
+          <input
+            id="mfa-code"
+            type="text"
+            value={code}
+            onChange={handleChange}
+            placeholder="000000"
+            maxLength={6}
+            className="field-input text-center text-2xl"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+          />
+        </div>
+
+        {error ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          </div>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={loading || code.length !== 6}
+          className="primary-btn w-full justify-center"
+        >
+          {loading ? t("mfa.verifying") : t("mfa.verify")}
+        </button>
+      </form>
+
+      <p className="mt-5 text-center text-xs text-muted-foreground">{t("mfa.help")}</p>
+    </AuthLayout>
   );
 }

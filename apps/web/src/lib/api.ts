@@ -1,11 +1,15 @@
+import { translate, type TranslationKey } from "@/lib/i18n";
+
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export const AUTH_TOKEN_KEY = "sentimentoia_access_token";
 export const AUTH_USER_KEY = "sentimentoia_user";
+const SETTINGS_STORAGE_KEY = "sentimentoia_preferences";
 
 export type AuthUser = {
   id?: string;
   email: string;
   name: string;
+  username?: string | null;
   phone?: string | null;
   role?: string;
   mfa_enabled?: boolean;
@@ -18,6 +22,13 @@ export type AuthResponse = {
   user: AuthUser;
 };
 
+export type MfaChallengeResponse = {
+  mfa_required: true;
+  message: string;
+};
+
+export type LoginResponse = AuthResponse | MfaChallengeResponse;
+
 export type AppTheme = "light" | "dark";
 export type AppLocale = "pt-BR" | "en-US";
 
@@ -27,6 +38,20 @@ export type UserSettings = {
   llm_trigger_min_comments: number;
   updated_at?: string;
 };
+
+function getCurrentLocale(): AppLocale {
+  if (typeof localStorage === "undefined") return "pt-BR";
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}") as Partial<UserSettings>;
+    return parsed.locale === "en-US" ? "en-US" : "pt-BR";
+  } catch {
+    return "pt-BR";
+  }
+}
+
+function tApi(key: TranslationKey) {
+  return translate(getCurrentLocale(), key);
+}
 
 export type ChatThread = {
   id: string;
@@ -99,7 +124,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   if (!response.ok) {
     const detail = data?.detail;
-    throw new Error(typeof detail === "string" ? detail : "Erro na requisição");
+    throw new Error(typeof detail === "string" ? detail : tApi("api.requestError"));
   }
 
   return data as T;
@@ -112,8 +137,8 @@ export const authApi = {
       body: JSON.stringify(payload),
     });
   },
-  login(payload: { email: string; password: string }) {
-    return apiFetch<AuthResponse>("/api/auth/login", {
+  login(payload: { email: string; password: string; mfa_code?: string }) {
+    return apiFetch<LoginResponse>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -121,13 +146,52 @@ export const authApi = {
   me() {
     return apiFetch<AuthUser>("/api/auth/me");
   },
+  updateProfile(payload: { name?: string; username?: string }) {
+    return apiFetch<AuthUser>("/api/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  changePassword(payload: { current_password: string; new_password: string }) {
+    return apiFetch<{ status: string; message: string }>("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  mfaStatus() {
+    return apiFetch<{ mfa_enabled: boolean; mfa_verified: boolean }>("/api/auth/mfa/status");
+  },
   setupMfa() {
     return apiFetch<{ status: string; secret: string; qr_code: string; message: string }>("/api/auth/mfa/setup", {
       method: "POST",
     });
   },
+  enableMfa(payload: { code: string }) {
+    return apiFetch<{ status: string; message: string }>("/api/auth/mfa/enable", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
   verifyMfa(payload: { code: string }) {
     return apiFetch<{ status: string; message: string }>("/api/auth/mfa/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  disableMfa(payload: { password: string }) {
+    return apiFetch<{ status: string; message: string }>("/api/auth/mfa/disable", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  requestPasswordReset(payload: { email: string }) {
+    return apiFetch<{ status: string; message: string }>("/api/auth/password/forgot", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  resetPassword(payload: { token: string; new_password: string }) {
+    return apiFetch<{ status: string; message: string }>("/api/auth/password/reset", {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -205,6 +269,17 @@ export type InsightsResponse = {
   items: InsightItem[];
 };
 
+export type NpsMetrics = {
+  total_responses: number;
+  promoters: number;
+  passives: number;
+  detractors: number;
+  nps_score: number;
+  average_score: number;
+  by_module: Record<string, { total: number; average: number; nps_score: number; promoters: number; detractors: number }>;
+  recent_comments: Array<{ comment: string; score: number; module_key: string; created_at: string }>;
+};
+
 export type SearchResponse = {
   search_id: string;
   query?: string;
@@ -215,6 +290,44 @@ export type SearchResponse = {
   llm_analysis?: any;
   alerts?: any[];
   errors?: Array<{ source?: string; error?: string } | string>;
+};
+
+export type ScrapeSource = "reclameaqui" | "reddit" | "mastodon" | "web" | "google" | "x" | "twitter";
+
+export type ScrapeItem = {
+  source: ScrapeSource | string;
+  title: string;
+  url: string;
+  snippet: string;
+  author?: string | null;
+  published_at?: string | null;
+  canonical_url?: string | null;
+  content_hash?: string;
+  quality_score?: number;
+  source_priority?: number;
+};
+
+export type ScrapeResponse = {
+  query: string;
+  sources: string[];
+  limit_per_source: number;
+  total: number;
+  results: Record<string, ScrapeItem[]>;
+  errors: Array<{ source: string; error: string }>;
+  metadata?: {
+    incremental_mode?: boolean;
+    max_total_items?: number;
+    sources?: Array<{
+      name: string;
+      active: boolean;
+      priority: number;
+      type: string;
+      parser: string;
+      fetch_mode: string;
+      rate_limit_per_minute: number;
+      deprecated?: boolean;
+    }>;
+  };
 };
 
 export const sentimentApi = {
@@ -228,6 +341,12 @@ export const sentimentApi = {
   },
   search(payload: { brand_name: string; sources: string[]; period_days?: number; locality?: string }) {
     return apiFetch<SearchResponse>("/api/search", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  scrape(payload: { query: string; sources: ScrapeSource[]; limit_per_source?: number }) {
+    return apiFetch<ScrapeResponse>("/api/scrape", {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -312,6 +431,49 @@ export const sentimentApi = {
       body: JSON.stringify(payload),
     });
   },
+  npsSubmit(payload: { session_id: string; module_key: string; score: number; comment?: string; route?: string }) {
+    return apiFetch<{ ok: boolean }>("/api/nps/submit", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  npsDismiss(payload: { session_id: string; module_key: string; route?: string }) {
+    return apiFetch<{ ok: boolean }>("/api/nps/dismiss", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  npsCheck(sessionId: string) {
+    return apiFetch<{ should_show: boolean }>(`/api/nps/check?session_id=${encodeURIComponent(sessionId)}`);
+  },
+  npsMetrics(params?: { period_days?: number; module_key?: string }) {
+    const query = new URLSearchParams();
+    if (params?.period_days) query.set("period_days", String(params.period_days));
+    if (params?.module_key) query.set("module_key", params.module_key);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return apiFetch<NpsMetrics>(`/api/nps/metrics${suffix}`);
+  },
+  deleteConversation(id: string) {
+    return apiFetch<{ ok: boolean }>(`/api/conversations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  deleteMessage(threadId: string, messageId: string) {
+    return apiFetch<{ ok: boolean }>(`/api/conversations/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`, { method: "DELETE" });
+  },
+  deleteAllConversations() {
+    return apiFetch<{ ok: boolean }>("/api/conversations/all", { method: "DELETE" });
+  },
+  deleteSearch(id: string) {
+    return apiFetch<{ ok: boolean }>(`/api/searches/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  deleteAllSearches() {
+    return apiFetch<{ ok: boolean }>("/api/searches/all", { method: "DELETE" });
+  },
+  deleteAllInsights() {
+    return apiFetch<{ ok: boolean }>("/api/insights/all", { method: "DELETE" });
+  },
+  deleteAllUserData() {
+    return apiFetch<{ ok: boolean; message: string }>("/api/user/data/all", { method: "DELETE" });
+  },
 };
 
 export async function downloadReport(format: "csv" | "pdf") {
@@ -321,7 +483,7 @@ export async function downloadReport(format: "csv" | "pdf") {
   });
 
   if (!response.ok) {
-    throw new Error("Erro ao gerar relatório");
+    throw new Error(tApi("api.reportError"));
   }
 
   const blob = await response.blob();

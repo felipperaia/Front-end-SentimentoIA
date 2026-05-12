@@ -1,9 +1,14 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { BrandMark } from "@/components/BrandMark";
+import { LanguageSelector } from "@/components/LanguageSelector";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import { BarChart3, CheckCircle2, FileText, MessageSquareText, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export default function Home() {
   const { loading, isAuthenticated, user } = useAuth();
+  const { t } = useAppSettings();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -14,96 +19,196 @@ export default function Home() {
 
   if (loading || (isAuthenticated && user)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center grid-bg">
+      <div className="app-bg flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-pink-500 border-t-cyan-400 rounded-full animate-spin mx-auto" />
-          <p className="mt-4 neon-cyan">Inicializando SentimentoIA...</p>
+          <div className="loading-spinner mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">{t("loading.initializing")}</p>
         </div>
       </div>
     );
   }
 
+  const features = [
+    {
+      icon: MessageSquareText,
+      title: t("home.featureCollectionTitle"),
+      text: t("home.featureCollectionText"),
+    },
+    {
+      icon: Sparkles,
+      title: t("home.featureAiTitle"),
+      text: t("home.featureAiText"),
+    },
+    {
+      icon: FileText,
+      title: t("home.featureReportTitle"),
+      text: t("home.featureReportText"),
+    },
+  ];
+
+  const workflow = [
+    [t("home.workflowSearchTitle"), t("home.workflowSearchText")],
+    [t("home.workflowAnalyzeTitle"), t("home.workflowAnalyzeText")],
+    [t("home.workflowActTitle"), t("home.workflowActText")],
+  ];
+
+  const plans = [
+    [t("home.planStarter"), t("home.planStarterText")],
+    [t("home.planGrowth"), t("home.planGrowthText")],
+    [t("home.planEnterprise"), t("home.planEnterpriseText")],
+  ];
+
   return (
-    <div className="min-h-screen bg-background grid-bg">
-      <nav
-        className="border-b-2 border-cyan-400 sticky top-0 z-50"
-        style={{ backgroundColor: "rgba(26, 26, 26, 0.8)", backdropFilter: "blur(4px)" }}
-      >
-        <div className="container flex items-center justify-between py-4">
+    <div className="min-h-screen bg-background text-foreground">
+      <nav className="sticky top-0 z-50 border-b border-border/70 bg-background/88 backdrop-blur">
+        <div className="container flex items-center justify-between gap-4 py-4">
+          <a href="/" className="inline-flex items-center">
+            <BrandMark size="md" />
+          </a>
           <div className="flex items-center gap-2">
-            <div className="text-2xl font-bold neon-pink">[SENTIMENTO</div>
-            <div className="text-2xl font-bold neon-cyan">IA]</div>
-          </div>
-          <div className="flex gap-3">
-            <a href="/login" className="px-4 py-2 border-2 border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black font-bold transition-all">
-              LOGIN
+            <LanguageSelector compact />
+            <a href="/login" className="secondary-btn hidden sm:inline-flex">
+              {t("nav.login")}
             </a>
-            <a href="/register" className="cyber-button">
-              CADASTRO
+            <a href="/register" className="primary-btn">
+              {t("nav.register")}
             </a>
           </div>
         </div>
       </nav>
 
-      <section className="container py-20 md:py-32">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div>
-            <h1 className="text-5xl md:text-6xl font-black mb-6 neon-glow">
-              ANALISE DE REPUTACAO DIGITAL
-            </h1>
-            <p className="text-lg text-gray-300 mb-8 leading-relaxed">
-              Monitore sua marca, encontre mencoes criticas, gere insights com IA e tome decisoes estrategicas com dados reais.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <a href="/login" className="cyber-button">
-                ENTRAR
-              </a>
-              <a href="/register" className="px-6 py-2 border-2 border-cyan-400 text-cyan-400 font-bold hover:bg-cyan-400 hover:text-dark-bg transition-all">
-                CRIAR CONTA
+      <main>
+        <section className="commercial-hero">
+          <div className="hero-dashboard" aria-hidden="true">
+            <div className="hero-dashboard-topline" />
+            <div className="hero-dashboard-grid">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="hero-dashboard-bars">
+              <span style={{ height: "58%" }} />
+              <span style={{ height: "82%" }} />
+              <span style={{ height: "44%" }} />
+              <span style={{ height: "68%" }} />
+              <span style={{ height: "36%" }} />
+            </div>
+          </div>
+
+          <div className="container relative z-10 py-16 md:py-24">
+            <div className="max-w-3xl">
+              <p className="section-eyebrow">{t("home.badge")}</p>
+              <h1 className="mt-5 text-4xl font-semibold leading-tight md:text-6xl">
+                {t("home.title")}
+              </h1>
+              <p className="mt-6 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+                {t("home.subtitle")}
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <a href="/register" className="primary-btn">
+                  <CheckCircle2 size={18} />
+                  <span>{t("home.primaryCta")}</span>
+                </a>
+                <a href="/login" className="secondary-btn">
+                  {t("home.secondaryCta")}
+                </a>
+              </div>
+            </div>
+
+            <div className="mt-12 grid gap-3 sm:grid-cols-3">
+              <HeroMetric label={t("home.metricMentions")} value="Reclame Aqui · Reddit · Mastodon" />
+              <HeroMetric label={t("home.metricInsights")} value="LLM" />
+              <HeroMetric label={t("home.metricReports")} value="CSV · PDF" />
+            </div>
+          </div>
+        </section>
+
+        <section className="section-band">
+          <div className="container">
+            <div className="max-w-2xl">
+              <p className="section-eyebrow">{t("common.productLine")}</p>
+              <h2 className="mt-3 text-3xl font-semibold">{t("home.featuresTitle")}</h2>
+            </div>
+
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              {features.map((feature) => (
+                <article key={feature.title} className="app-panel p-6">
+                  <feature.icon className="mb-5 h-9 w-9 text-[color:var(--brand)]" />
+                  <h3 className="text-lg font-semibold">{feature.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{feature.text}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section-band bg-card/45">
+          <div className="container grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
+            <div>
+              <p className="section-eyebrow">{t("home.dashboardPreviewTitle")}</p>
+              <h2 className="mt-3 text-3xl font-semibold">{t("home.workflowTitle")}</h2>
+              <p className="mt-4 text-muted-foreground">{t("home.dashboardPreviewSubtitle")}</p>
+            </div>
+
+            <div className="grid gap-4">
+              {workflow.map(([title, text]) => (
+                <article key={title} className="workflow-row">
+                  <ShieldCheck className="h-5 w-5 text-[color:var(--brand)]" />
+                  <div>
+                    <h3 className="text-base font-semibold">{title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{text}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section-band">
+          <div className="container">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+              <div>
+                <p className="section-eyebrow">{t("home.plansTitle")}</p>
+                <h2 className="mt-3 text-3xl font-semibold">{t("home.finalCtaTitle")}</h2>
+                <p className="mt-4 text-muted-foreground">{t("home.plansSubtitle")}</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {plans.map(([title, text]) => (
+                  <article key={title} className="app-panel p-5">
+                    <BarChart3 className="mb-4 h-7 w-7 text-[color:var(--brand)]" />
+                    <h3 className="text-lg font-semibold">{title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">{text}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="section-band pt-0">
+          <div className="container">
+            <div className="cta-band">
+              <div>
+                <h2 className="text-3xl font-semibold">{t("home.finalCtaTitle")}</h2>
+                <p className="mt-3 text-sm text-muted-foreground">{t("home.finalCtaText")}</p>
+              </div>
+              <a href="/register" className="primary-btn">
+                {t("home.primaryCta")}
               </a>
             </div>
           </div>
-          <div className="cyber-card p-8 h-96 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-6xl mb-4">IA</div>
-              <p className="neon-cyan text-xl font-bold">DECISAO EM TEMPO REAL</p>
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </main>
+    </div>
+  );
+}
 
-      <section className="container py-20">
-        <h2 className="text-4xl font-bold text-center mb-16 neon-glow">
-          FLUXO DO SISTEMA
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            ["1", "LOGIN OU CADASTRO", "Acesse sua conta ou crie um novo usuario."],
-            ["2", "BUSCA POS-LOGIN", "Pesquise uma marca e colete dados reais."],
-            ["3", "DASHBOARD E ANALISE", "Veja graficos e decisoes geradas pela LLM."],
-          ].map(([step, title, desc]) => (
-            <div key={step} className="cyber-card p-6 hover:pulse-glow transition-all">
-              <div className="text-4xl font-bold neon-pink mb-4">{step}</div>
-              <h3 className="text-lg font-bold neon-cyan mb-2">{title}</h3>
-              <p className="text-sm text-gray-400">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="container py-20 text-center">
-        <div className="cyber-card p-12">
-          <h2 className="text-3xl font-bold mb-6 neon-glow">
-            PRONTO PARA ANALISAR SUA REPUTACAO?
-          </h2>
-          <p className="text-lg text-gray-300 mb-8">
-            Comece pelo cadastro ou entre para ir direto para a tela de busca.
-          </p>
-          <a href="/register" className="cyber-button inline-block">
-            CRIAR CONTA AGORA
-          </a>
-        </div>
-      </section>
+function HeroMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="hero-metric">
+      <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
+      <strong className="mt-2 block text-lg font-semibold">{value}</strong>
     </div>
   );
 }

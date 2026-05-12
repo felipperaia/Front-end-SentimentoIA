@@ -24,7 +24,7 @@ export function useAuth(options?: UseAuthOptions) {
     } catch (err) {
       clearAuthSession();
       setUser(null);
-      setError(err instanceof Error ? err : new Error("Erro de autenticação"));
+      setError(err instanceof Error ? err : new Error("Authentication error"));
       return null;
     } finally {
       setLoading(false);
@@ -43,7 +43,7 @@ export function useAuth(options?: UseAuthOptions) {
   const logout = useCallback(async () => {
     authApi.logout();
     setUser(null);
-    window.location.href = "/login";
+    window.location.href = "/";
   }, []);
 
   const state = useMemo(

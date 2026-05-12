@@ -1,40 +1,15 @@
 import { getToken, sentimentApi, type AppLocale, type AppTheme, type UserSettings } from "@/lib/api";
+import { translate, type TranslationKey, type TranslationValues } from "@/lib/i18n";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "sentimentoia_preferences";
+const DEFAULT_LOCALE: AppLocale = import.meta.env.VITE_DEFAULT_LOCALE === "en-US" ? "en-US" : "pt-BR";
 
 const DEFAULT_SETTINGS: UserSettings = {
   theme: "light",
-  locale: "pt-BR",
+  locale: DEFAULT_LOCALE,
   llm_trigger_min_comments: 20,
 };
-
-const TRANSLATIONS = {
-  "nav.search": { "pt-BR": "Busca", "en-US": "Search" },
-  "nav.dashboard": { "pt-BR": "Dashboard", "en-US": "Dashboard" },
-  "nav.insights": { "pt-BR": "Insights", "en-US": "Insights" },
-  "nav.reports": { "pt-BR": "Relatorios", "en-US": "Reports" },
-  "nav.settings": { "pt-BR": "Configuracoes", "en-US": "Settings" },
-  "nav.logout": { "pt-BR": "Sair", "en-US": "Sign out" },
-  "chat.title": { "pt-BR": "Assistente do Sistema", "en-US": "System Assistant" },
-  "chat.placeholder": {
-    "pt-BR": "Pergunte sobre dashboard, insights, navegacao e configuracoes...",
-    "en-US": "Ask about dashboard, insights, navigation, and settings...",
-  },
-  "settings.title": { "pt-BR": "Configuracoes", "en-US": "Settings" },
-  "settings.subtitle": {
-    "pt-BR": "Personalize tema, idioma e limiar minimo da LLM.",
-    "en-US": "Customize theme, language, and minimum LLM threshold.",
-  },
-  "settings.theme": { "pt-BR": "Tema", "en-US": "Theme" },
-  "settings.language": { "pt-BR": "Idioma", "en-US": "Language" },
-  "settings.threshold": { "pt-BR": "Limiar minimo da LLM", "en-US": "LLM minimum threshold" },
-  "settings.save": { "pt-BR": "Salvar configuracoes", "en-US": "Save settings" },
-  "theme.light": { "pt-BR": "Claro", "en-US": "Light" },
-  "theme.dark": { "pt-BR": "Escuro", "en-US": "Dark" },
-} as const;
-
-type TranslationKey = keyof typeof TRANSLATIONS;
 
 type AppSettingsContextType = {
   settings: UserSettings;
@@ -45,7 +20,7 @@ type AppSettingsContextType = {
   setThresholdPreference: (value: number) => void;
   refreshSettings: () => Promise<void>;
   saveSettings: (partial?: Partial<UserSettings>) => Promise<void>;
-  t: (key: TranslationKey) => string;
+  t: (key: TranslationKey, values?: TranslationValues) => string;
 };
 
 const AppSettingsContext = createContext<AppSettingsContextType | undefined>(undefined);
@@ -83,6 +58,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     applyTheme(settings.theme);
+    document.documentElement.lang = settings.locale;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
@@ -158,10 +134,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const t = useCallback(
-    (key: TranslationKey) => {
-      const dictionary = TRANSLATIONS[key];
-      return dictionary[settings.locale] ?? dictionary["pt-BR"];
-    },
+    (key: TranslationKey, values?: TranslationValues) => translate(settings.locale, key, values),
     [settings.locale]
   );
 

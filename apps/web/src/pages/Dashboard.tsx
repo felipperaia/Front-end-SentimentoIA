@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { AppShell } from "@/components/AppShell";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -31,6 +32,7 @@ function mapRecord(record?: Record<string, number>) {
 }
 
 export default function Dashboard() {
+  const { settings, t } = useAppSettings();
   const [, setLocation] = useLocation();
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function Dashboard() {
     try {
       setData(await sentimentApi.dashboard());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar dashboard");
+      setError(err instanceof Error ? err.message : t("dashboard.error"));
     } finally {
       setLoading(false);
     }
@@ -73,13 +75,14 @@ export default function Dashboard() {
   const reputationScore = Math.round(metrics.reputation_score ?? 0);
   const criticalMentions = metrics.critical_mentions ?? 0;
   const averageUrgency = Math.round((metrics.average_urgency ?? 0) * 100);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(settings.locale), [settings.locale]);
 
   if (loading) {
     return (
       <div className="app-bg min-h-screen flex items-center justify-center">
         <div className="text-center">
           <RefreshCw className="mx-auto h-10 w-10 animate-spin text-[color:var(--brand)]" />
-          <p className="mt-4 text-sm text-muted-foreground">Carregando dashboard...</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t("dashboard.loading")}</p>
         </div>
       </div>
     );
@@ -87,20 +90,23 @@ export default function Dashboard() {
 
   return (
     <AppShell
-      title="Dashboard"
+      title={t("nav.dashboard")}
       subtitle={
         data?.batch_id
-          ? `Batch atual: ${data.batch_id}`
-          : "Execute uma busca para preencher indicadores e recomendacoes da IA."
+          ? t("dashboard.subtitleBatch", { batchId: data.batch_id })
+          : t("dashboard.subtitleEmpty")
       }
       actions={
         <>
+          <button onClick={() => setIsDataModalOpen(true)} className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30">
+            Gerenciar Dados
+          </button>
           <button onClick={() => setLocation("/search")} className="secondary-btn">
-            Nova busca
+            {t("dashboard.newSearch")}
           </button>
           <button onClick={loadDashboard} className="primary-btn">
             <RefreshCw size={16} />
-            <span>Atualizar</span>
+            <span>{t("common.refresh")}</span>
           </button>
         </>
       }
@@ -114,26 +120,26 @@ export default function Dashboard() {
       {totalMentions === 0 ? (
         <div className="app-panel mx-auto max-w-3xl p-10 text-center">
           <SearchIcon className="mx-auto mb-4 h-10 w-10 text-[color:var(--brand)]" />
-          <h2 className="text-2xl font-semibold">Nenhum dado no dashboard</h2>
+          <h2 className="text-2xl font-semibold">{t("dashboard.emptyTitle")}</h2>
           <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
-            Inicie uma busca para gerar metricas, graficos e insights de reputacao em tempo real.
+            {t("dashboard.emptyText")}
           </p>
           <button onClick={() => setLocation("/search")} className="primary-btn mx-auto mt-6">
-            Iniciar busca
+            {t("dashboard.emptyAction")}
           </button>
         </div>
       ) : (
         <>
           <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={BarChart3} label="Mencoes" value={totalMentions} />
-            <MetricCard icon={TrendingUp} label="Reputacao" value={`${reputationScore}/100`} />
-            <MetricCard icon={AlertTriangle} label="Criticas" value={criticalMentions} />
-            <MetricCard icon={Brain} label="Urgencia media" value={`${averageUrgency}%`} />
+            <MetricCard icon={BarChart3} label={t("dashboard.metricMentions")} value={numberFormatter.format(totalMentions)} />
+            <MetricCard icon={TrendingUp} label={t("dashboard.metricReputation")} value={`${numberFormatter.format(reputationScore)}/100`} />
+            <MetricCard icon={AlertTriangle} label={t("dashboard.metricCritical")} value={numberFormatter.format(criticalMentions)} />
+            <MetricCard icon={Brain} label={t("dashboard.metricUrgency")} value={`${numberFormatter.format(averageUrgency)}%`} />
           </section>
 
           <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
             <article className="app-panel p-5 md:p-6">
-              <h2 className="panel-title">Sentimentos</h2>
+              <h2 className="panel-title">{t("dashboard.sentiments")}</h2>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -149,7 +155,7 @@ export default function Dashboard() {
             </article>
 
             <article className="app-panel p-5 md:p-6">
-              <h2 className="panel-title">Fontes</h2>
+              <h2 className="panel-title">{t("dashboard.sources")}</h2>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={sourceData}>
@@ -166,9 +172,9 @@ export default function Dashboard() {
 
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             <article className="app-panel p-5 md:p-6 xl:col-span-2">
-              <h2 className="panel-title">Aspectos mais citados</h2>
+              <h2 className="panel-title">{t("dashboard.aspects")}</h2>
               {aspectData.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum aspecto detectado.</p>
+                <p className="text-sm text-muted-foreground">{t("dashboard.noAspects")}</p>
               ) : (
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
@@ -186,7 +192,7 @@ export default function Dashboard() {
 
             <article className="app-panel p-5 md:p-6">
               <h2 className="panel-title flex items-center gap-2">
-                <FileText size={18} /> Mencoes recentes
+                <FileText size={18} /> {t("dashboard.recentMentions")}
               </h2>
               <div className="space-y-3 pr-1">
                 {mentions.slice(0, 6).map((mention) => (

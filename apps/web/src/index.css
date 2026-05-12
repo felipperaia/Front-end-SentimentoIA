@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -44,75 +43,76 @@
 }
 
 :root {
-  --brand: oklch(0.54 0.14 196);
-  --brand-soft: oklch(0.88 0.03 198);
-  --accent-strong: oklch(0.66 0.16 45);
-  --chart-grid: oklch(0.9 0.01 250);
-  --radius: 0.25rem;
+  --brand: oklch(0.48 0.12 195);
+  --brand-strong: oklch(0.38 0.11 202);
+  --brand-soft: oklch(0.93 0.03 192);
+  --accent-strong: oklch(0.62 0.13 58);
+  --chart-grid: oklch(0.9 0.01 245);
+  --radius: 0.5rem;
 
-  --background: oklch(0.98 0.01 96);
-  --foreground: oklch(0.22 0.03 244);
+  --background: oklch(0.98 0.005 235);
+  --foreground: oklch(0.22 0.03 248);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.03 244);
+  --card-foreground: oklch(0.22 0.03 248);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.24 0.03 244);
-  --secondary: oklch(0.95 0.02 206);
-  --secondary-foreground: oklch(0.34 0.04 233);
-  --muted: oklch(0.95 0.01 250);
-  --muted-foreground: oklch(0.46 0.02 240);
+  --popover-foreground: oklch(0.22 0.03 248);
+  --secondary: oklch(0.94 0.015 235);
+  --secondary-foreground: oklch(0.27 0.03 248);
+  --muted: oklch(0.95 0.008 245);
+  --muted-foreground: oklch(0.46 0.02 245);
   --accent: var(--brand-soft);
-  --accent-foreground: oklch(0.25 0.04 228);
-  --destructive: oklch(0.63 0.22 22);
+  --accent-foreground: oklch(0.24 0.04 220);
+  --destructive: oklch(0.58 0.2 24);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.9 0.01 250);
+  --border: oklch(0.88 0.012 245);
   --input: oklch(0.99 0 0);
   --ring: var(--brand);
   --primary: var(--brand);
   --primary-foreground: oklch(0.99 0 0);
-  --chart-1: oklch(0.54 0.14 196);
-  --chart-2: oklch(0.66 0.16 45);
-  --chart-3: oklch(0.61 0.14 140);
-  --chart-4: oklch(0.55 0.15 28);
-  --chart-5: oklch(0.57 0.11 280);
+  --chart-1: oklch(0.48 0.12 195);
+  --chart-2: oklch(0.62 0.13 58);
+  --chart-3: oklch(0.55 0.13 145);
+  --chart-4: oklch(0.58 0.17 24);
+  --chart-5: oklch(0.52 0.1 278);
   --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.2 0.03 244);
+  --sidebar-foreground: oklch(0.2 0.03 248);
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: var(--brand-soft);
-  --sidebar-accent-foreground: oklch(0.25 0.04 228);
-  --sidebar-border: oklch(0.9 0.01 250);
+  --sidebar-accent-foreground: oklch(0.24 0.04 220);
+  --sidebar-border: oklch(0.88 0.012 245);
   --sidebar-ring: var(--brand);
 }
 
 .dark {
-  --background: oklch(0.17 0.03 248);
-  --foreground: oklch(0.95 0.01 260);
-  --card: oklch(0.2 0.03 248);
+  --background: oklch(0.16 0.025 248);
+  --foreground: oklch(0.94 0.01 260);
+  --card: oklch(0.2 0.026 248);
   --card-foreground: oklch(0.94 0.01 260);
-  --popover: oklch(0.2 0.03 248);
-  --popover-foreground: oklch(0.95 0.01 260);
-  --secondary: oklch(0.26 0.03 248);
+  --popover: oklch(0.2 0.026 248);
+  --popover-foreground: oklch(0.94 0.01 260);
+  --secondary: oklch(0.25 0.026 248);
   --secondary-foreground: oklch(0.94 0.01 260);
   --muted: oklch(0.24 0.02 248);
-  --muted-foreground: oklch(0.76 0.01 257);
-  --accent: oklch(0.28 0.03 206);
-  --accent-foreground: oklch(0.95 0.01 260);
-  --destructive: oklch(0.63 0.22 22);
+  --muted-foreground: oklch(0.72 0.012 257);
+  --accent: oklch(0.26 0.035 202);
+  --accent-foreground: oklch(0.94 0.01 260);
+  --destructive: oklch(0.64 0.21 24);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.32 0.03 248);
+  --border: oklch(0.32 0.026 248);
   --input: oklch(0.24 0.02 248);
-  --ring: oklch(0.66 0.11 196);
-  --primary: oklch(0.66 0.11 196);
-  --primary-foreground: oklch(0.12 0.01 248);
-  --chart-grid: oklch(0.32 0.03 248);
-  --sidebar: oklch(0.19 0.03 248);
+  --ring: oklch(0.65 0.1 195);
+  --primary: oklch(0.65 0.1 195);
+  --primary-foreground: oklch(0.13 0.02 248);
+  --chart-grid: oklch(0.32 0.026 248);
+  --sidebar: oklch(0.19 0.026 248);
   --sidebar-foreground: oklch(0.94 0.01 260);
-  --sidebar-primary: oklch(0.66 0.11 196);
-  --sidebar-primary-foreground: oklch(0.14 0.01 248);
-  --sidebar-accent: oklch(0.28 0.03 206);
+  --sidebar-primary: oklch(0.65 0.1 195);
+  --sidebar-primary-foreground: oklch(0.13 0.02 248);
+  --sidebar-accent: oklch(0.26 0.035 202);
   --sidebar-accent-foreground: oklch(0.94 0.01 260);
-  --sidebar-border: oklch(0.32 0.03 248);
-  --sidebar-ring: oklch(0.66 0.11 196);
+  --sidebar-border: oklch(0.32 0.026 248);
+  --sidebar-ring: oklch(0.65 0.1 195);
 }
 
 @layer base {
@@ -121,40 +121,32 @@
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
   }
-  
+
   * {
     @apply border-border outline-ring/50;
   }
-  
+
   body {
     @apply bg-background text-foreground;
-    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    font-family:
+      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background:
-      radial-gradient(circle at 8% 8%, color-mix(in oklch, var(--brand) 12%, transparent), transparent 42%),
-      radial-gradient(circle at 92% 0%, color-mix(in oklch, var(--accent-strong) 10%, transparent), transparent 34%),
-      linear-gradient(180deg, color-mix(in oklch, var(--background) 98%, white) 0%, var(--background) 100%);
-    position: relative;
+      linear-gradient(180deg, color-mix(in oklch, var(--background) 96%, white) 0%, var(--background) 46%),
+      var(--background);
   }
-  
-  h1, h2, h3, h4, h5, h6 {
-    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family:
+      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
   }
-  
-  h1 {
-    @apply text-4xl md:text-5xl;
-  }
-  
-  h2 {
-    @apply text-3xl md:text-4xl;
-  }
-  
-  h3 {
-    @apply text-2xl md:text-3xl;
-  }
-  
-  /* Interactive Elements */
+
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
@@ -166,28 +158,22 @@
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
   }
-  
-  /* Scrollbar Styling */
+
   ::-webkit-scrollbar {
-    @apply w-2 h-2;
+    @apply h-2 w-2;
   }
-  
+
   ::-webkit-scrollbar-track {
-    background-color: oklch(0.1 0 0);
+    background-color: color-mix(in oklch, var(--muted) 70%, var(--background));
   }
-  
+
   ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #ff00ff, #00ffff);
-    border-radius: 4px;
-  }
-  
-  ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #00ffff, #ff00ff);
+    background-color: color-mix(in oklch, var(--brand) 42%, var(--border));
+    border-radius: 999px;
   }
 }
 
 @layer components {
-  /* Container */
   .container {
     width: 100%;
     margin-left: auto;
@@ -210,60 +196,164 @@
 
   @media (min-width: 1024px) {
     .container {
+      max-width: 1280px;
       padding-left: 2rem;
       padding-right: 2rem;
-      max-width: 1280px;
     }
   }
 
   .app-bg {
     background:
-      radial-gradient(circle at 12% 0%, color-mix(in oklch, var(--brand) 12%, transparent), transparent 35%),
-      radial-gradient(circle at 82% 100%, color-mix(in oklch, var(--accent-strong) 14%, transparent), transparent 40%),
-      linear-gradient(180deg, color-mix(in oklch, var(--background) 98%, white) 0%, var(--background) 100%);
+      linear-gradient(180deg, color-mix(in oklch, var(--background) 96%, white) 0%, var(--background) 54%),
+      var(--background);
   }
 
   .app-glass {
-    background: color-mix(in oklch, var(--card) 88%, transparent);
-  }
-
-  .brand-pill {
-    @apply rounded-full px-4 py-2 text-sm font-semibold;
-    background: linear-gradient(120deg, color-mix(in oklch, var(--brand) 16%, var(--card)), color-mix(in oklch, var(--accent-strong) 16%, var(--card)));
-    border: 1px solid color-mix(in oklch, var(--brand) 25%, var(--border));
-  }
-
-  .shell-nav-btn {
-    @apply inline-flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-sm transition;
-    border-color: color-mix(in oklch, var(--border) 80%, transparent);
     background: color-mix(in oklch, var(--card) 90%, transparent);
   }
 
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    border: 1px solid color-mix(in oklch, var(--brand) 24%, var(--border));
+    border-radius: var(--radius);
+    background: color-mix(in oklch, var(--card) 88%, var(--brand-soft));
+    color: color-mix(in oklch, var(--brand-strong) 84%, var(--foreground));
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+    padding: 0.62rem 0.78rem;
+  }
+
+  .language-select {
+    @apply inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition;
+  }
+
+  .language-select:hover {
+    background: color-mix(in oklch, var(--accent) 55%, var(--card));
+  }
+
+  .language-select select {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    outline: none;
+  }
+
+  .language-select-compact {
+    @apply px-2 py-2;
+  }
+
+  .section-eyebrow {
+    @apply text-sm font-semibold text-[color:var(--brand-strong)];
+    letter-spacing: 0;
+  }
+
+  .section-band {
+    @apply py-14 md:py-20;
+  }
+
+  .commercial-hero {
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+    background:
+      linear-gradient(90deg, color-mix(in oklch, var(--background) 98%, white) 0%, color-mix(in oklch, var(--brand-soft) 36%, var(--background)) 100%);
+  }
+
+  .hero-dashboard {
+    position: absolute;
+    inset: auto -7rem 2rem auto;
+    width: min(58vw, 720px);
+    height: min(48vw, 480px);
+    min-width: 420px;
+    border: 1px solid color-mix(in oklch, var(--brand) 18%, var(--border));
+    border-radius: var(--radius);
+    background:
+      linear-gradient(180deg, color-mix(in oklch, var(--card) 94%, transparent), color-mix(in oklch, var(--secondary) 62%, transparent));
+    box-shadow: 0 24px 80px color-mix(in oklch, var(--foreground) 12%, transparent);
+    opacity: 0.92;
+    transform: rotate(-4deg);
+  }
+
+  .hero-dashboard-topline {
+    height: 54px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklch, var(--card) 82%, var(--brand-soft));
+  }
+
+  .hero-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    padding: 22px;
+  }
+
+  .hero-dashboard-grid span {
+    height: 78px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+  }
+
+  .hero-dashboard-bars {
+    display: flex;
+    align-items: end;
+    gap: 18px;
+    height: 190px;
+    padding: 22px;
+  }
+
+  .hero-dashboard-bars span {
+    flex: 1;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: color-mix(in oklch, var(--brand) 72%, var(--card));
+  }
+
+  .hero-metric {
+    @apply rounded-lg border border-border bg-card/85 p-4 backdrop-blur;
+    box-shadow: 0 12px 32px color-mix(in oklch, var(--foreground) 7%, transparent);
+  }
+
+  .workflow-row {
+    @apply flex gap-4 rounded-lg border border-border bg-card p-5;
+  }
+
+  .cta-band {
+    @apply flex flex-col gap-5 rounded-lg border border-border bg-card p-6 md:flex-row md:items-center md:justify-between md:p-8;
+  }
+
+  .shell-nav-btn {
+    @apply inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm transition;
+    border-color: color-mix(in oklch, var(--border) 82%, transparent);
+    background: color-mix(in oklch, var(--card) 92%, transparent);
+  }
+
   .shell-nav-btn:hover {
-    background: color-mix(in oklch, var(--accent) 45%, var(--card));
+    background: color-mix(in oklch, var(--accent) 55%, var(--card));
   }
 
   .shell-nav-btn-active {
-    background: color-mix(in oklch, var(--brand) 16%, var(--card));
-    border-color: color-mix(in oklch, var(--brand) 44%, var(--border));
-    color: color-mix(in oklch, var(--brand) 74%, var(--foreground));
+    background: color-mix(in oklch, var(--brand) 12%, var(--card));
+    border-color: color-mix(in oklch, var(--brand) 42%, var(--border));
+    color: color-mix(in oklch, var(--brand-strong) 74%, var(--foreground));
   }
 
   .page-title {
-    @apply text-3xl font-semibold tracking-tight md:text-4xl;
+    @apply text-3xl font-semibold md:text-4xl;
+    letter-spacing: 0;
   }
 
   .app-panel {
-    @apply rounded-2xl border border-border bg-card;
-    box-shadow:
-      0 8px 24px color-mix(in oklch, var(--brand) 8%, transparent),
-      0 1px 0 color-mix(in oklch, var(--card) 70%, white) inset;
+    @apply rounded-lg border border-border bg-card;
+    box-shadow: 0 12px 32px color-mix(in oklch, var(--foreground) 5%, transparent);
   }
 
   .stat-card {
-    @apply rounded-2xl border border-border;
-    background:
-      linear-gradient(150deg, color-mix(in oklch, var(--brand) 8%, var(--card)) 0%, var(--card) 100%);
+    @apply rounded-lg border border-border bg-card;
+    box-shadow: 0 8px 24px color-mix(in oklch, var(--foreground) 5%, transparent);
   }
 
   .panel-title {
@@ -271,28 +361,42 @@
   }
 
   .field-label {
-    @apply block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground;
+    @apply block text-xs font-semibold uppercase text-muted-foreground;
+    letter-spacing: 0;
   }
 
   .field-input {
-    @apply mt-2 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground;
+    @apply mt-2 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground;
     outline: none;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
   }
 
   .field-input:focus {
     border-color: color-mix(in oklch, var(--brand) 48%, var(--border));
-    box-shadow: 0 0 0 3px color-mix(in oklch, var(--brand) 20%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--brand) 18%, transparent);
+  }
+
+  .field-with-icon {
+    position: relative;
+  }
+
+  .field-with-icon > svg {
+    position: absolute;
+    left: 0.75rem;
+    top: 1.08rem;
+    color: var(--muted-foreground);
+    pointer-events: none;
   }
 
   .primary-btn {
-    @apply inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white transition;
-    background: linear-gradient(110deg, color-mix(in oklch, var(--brand) 88%, black), color-mix(in oklch, var(--accent-strong) 72%, black));
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-primary-foreground transition;
+    background: var(--primary);
   }
 
   .primary-btn:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--brand-strong) 84%, var(--primary));
+    box-shadow: 0 10px 24px color-mix(in oklch, var(--brand) 22%, transparent);
     transform: translateY(-1px);
-    box-shadow: 0 8px 22px color-mix(in oklch, var(--brand) 36%, transparent);
   }
 
   .primary-btn:disabled {
@@ -301,15 +405,19 @@
   }
 
   .secondary-btn {
-    @apply inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium transition;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-medium transition;
   }
 
-  .secondary-btn:hover {
+  .secondary-btn:hover:not(:disabled) {
     background: color-mix(in oklch, var(--accent) 55%, var(--card));
   }
 
+  .text-link {
+    @apply font-medium text-[color:var(--brand-strong)] underline-offset-4 transition hover:underline;
+  }
+
   .chip-btn {
-    @apply inline-flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-3 text-sm transition;
+    @apply inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-3 text-sm transition;
   }
 
   .chip-btn:hover {
@@ -318,7 +426,7 @@
 
   .chip-btn-active {
     border-color: color-mix(in oklch, var(--brand) 44%, var(--border));
-    background: color-mix(in oklch, var(--brand) 12%, var(--card));
+    background: color-mix(in oklch, var(--brand) 10%, var(--card));
   }
 
   .chip-letter {
@@ -332,153 +440,32 @@
   }
 
   .icon-btn {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-foreground transition;
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-foreground transition;
   }
 
   .icon-btn:hover {
     background: color-mix(in oklch, var(--accent) 55%, var(--card));
   }
-  
-  /* Cyberpunk HUD Elements */
-  .hud-border {
-    @apply border-2 border-cyan-400 relative;
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5), inset 0 0 10px rgba(0, 255, 255, 0.1);
+
+  .loading-spinner {
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 3px solid color-mix(in oklch, var(--brand) 16%, var(--border));
+    border-top-color: var(--brand);
+    border-radius: 999px;
+    animation: spin 0.8s linear infinite;
   }
-  
-  .hud-corner {
-    @apply absolute w-4 h-4 border-2 border-pink-500;
-  }
-  
-  .hud-corner-tl {
-    @apply top-0 left-0 border-r-0 border-b-0;
-  }
-  
-  .hud-corner-tr {
-    @apply top-0 right-0 border-l-0 border-b-0;
-  }
-  
-  .hud-corner-bl {
-    @apply bottom-0 left-0 border-r-0 border-t-0;
-  }
-  
-  .hud-corner-br {
-    @apply bottom-0 right-0 border-l-0 border-t-0;
-  }
-  
-  /* Neon Glow Effects */
-  .neon-glow {
-    text-shadow: 0 0 10px rgba(255, 0, 255, 0.8), 0 0 20px rgba(0, 255, 255, 0.6);
-  }
-  
-  .neon-pink {
-    @apply text-pink-500;
-    text-shadow: 0 0 10px rgba(255, 0, 255, 0.8);
-  }
-  
-  .neon-cyan {
-    @apply text-cyan-400;
-    text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
-  }
-  
-  .neon-purple {
-    @apply text-purple-500;
-    text-shadow: 0 0 10px rgba(200, 0, 255, 0.8);
-  }
-  
-  .neon-green {
-    @apply text-green-400;
-    text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
-  }
-  
-  .neon-red {
-    @apply text-red-500;
-    text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
-  }
-  
-  /* Cyber Card */
-  .cyber-card {
-    background-color: oklch(0.1 0 0);
-    @apply border-2 border-cyan-400;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.05);
-    position: relative;
-  }
-  
-  .cyber-card::before {
-    content: '';
-    @apply absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-500 via-cyan-400 to-purple-500;
-    opacity: 0.5;
-  }
-  
-  /* Cyber Button */
-  .cyber-button {
-    @apply relative px-6 py-2 font-bold border-2 border-pink-500;
-    background-color: oklch(0.65 0.25 320);
-    color: oklch(0.05 0 0);
-    text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
-    box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
-    transition: all 0.3s ease;
-    font-family: 'Courier New', 'Courier', monospace;
-    letter-spacing: 0.05em;
-  }
-  
-  .cyber-button:hover {
-    background-color: oklch(0.7 0.25 180);
-    @apply border-cyan-400;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 40px rgba(255, 0, 255, 0.4);
-    transform: scale(1.05);
-  }
-  
-  .cyber-button:active {
-    transform: scale(0.95);
-  }
-  
-  /* Scan Line Animation */
-  .scan-line {
-    animation: scan 8s linear infinite;
-  }
-  
-  @keyframes scan {
-    0% {
-      transform: translateY(-100%);
-    }
-    100% {
-      transform: translateY(100%);
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
     }
   }
-  
-  /* Glitch Effect */
-  .glitch {
-    animation: glitch 0.3s ease-in-out;
-  }
-  
-  @keyframes glitch {
-    0%, 100% {
-      text-shadow: -2px 0 #ff00ff, 2px 0 #00ffff;
+
+  @media (max-width: 768px) {
+    .hero-dashboard {
+      inset: auto -15rem -2rem auto;
+      opacity: 0.28;
     }
-    50% {
-      text-shadow: 2px 0 #ff00ff, -2px 0 #00ffff;
-    }
-  }
-  
-  /* Pulse Glow */
-  .pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite;
-  }
-  
-  @keyframes pulse-glow {
-    0%, 100% {
-      box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
-    }
-    50% {
-      box-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 30px rgba(255, 0, 255, 0.4);
-    }
-  }
-  
-  /* Grid Background */
-  .grid-bg {
-    background-image: 
-      linear-gradient(0deg, transparent 24%, rgba(0, 255, 255, 0.03) 25%, rgba(0, 255, 255, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, 0.03) 75%, rgba(0, 255, 255, 0.03) 76%, transparent 77%, transparent),
-      linear-gradient(90deg, transparent 24%, rgba(0, 255, 255, 0.03) 25%, rgba(0, 255, 255, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, 0.03) 75%, rgba(0, 255, 255, 0.03) 76%, transparent 77%, transparent);
-    background-size: 50px 50px;
   }
 }

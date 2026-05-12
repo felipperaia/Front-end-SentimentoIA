@@ -9,6 +9,8 @@ type ThreadOption = {
   label: string;
 };
 
+const CHAT_ENABLED = String(import.meta.env.VITE_ENABLE_CHAT ?? "true") !== "false";
+
 function mapMessages(items: ChatMessage[]): Message[] {
   return items.map((item) => ({
     role: item.role === "assistant" ? "assistant" : item.role === "system" ? "system" : "user",
@@ -16,10 +18,10 @@ function mapMessages(items: ChatMessage[]): Message[] {
   }));
 }
 
-function normalizeThreadOptions(items: ChatThread[]): ThreadOption[] {
+function normalizeThreadOptions(items: ChatThread[], fallbackLabel: string): ThreadOption[] {
   return items.map((thread) => ({
     id: thread.thread_id || thread.id,
-    label: thread.title || "Nova conversa",
+    label: thread.title || fallbackLabel,
   }));
 }
 
@@ -34,8 +36,9 @@ export function DomainChatWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
 
   const ensureActiveThread = useCallback(async () => {
+    const fallbackLabel = t("chat.threadFallback");
     const listed = await sentimentApi.listChatThreads(20);
-    const options = normalizeThreadOptions(listed.items || []);
+    const options = normalizeThreadOptions(listed.items || [], fallbackLabel);
     setThreadOptions(options);
 
     if (options.length > 0) {
@@ -44,9 +47,9 @@ export function DomainChatWidget() {
 
     const created = await sentimentApi.createChatThread();
     const createdId = created.item.thread_id || created.item.id;
-    setThreadOptions([{ id: createdId, label: created.item.title || "Nova conversa" }]);
+    setThreadOptions([{ id: createdId, label: created.item.title || fallbackLabel }]);
     return createdId;
-  }, []);
+  }, [t]);
 
   const loadMessages = useCallback(async (threadId: string) => {
     const response = await sentimentApi.listChatMessages(threadId, 120);
@@ -61,11 +64,11 @@ export function DomainChatWidget() {
       setActiveThreadId(threadId);
       await loadMessages(threadId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao abrir chat");
+      setError(err instanceof Error ? err.message : t("chat.openError"));
     } finally {
       setBooting(false);
     }
-  }, [activeThreadId, ensureActiveThread, loadMessages]);
+  }, [activeThreadId, ensureActiveThread, loadMessages, t]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,19 +95,19 @@ export function DomainChatWidget() {
 
         const threadId = response.thread?.thread_id || response.thread?.id;
         if (threadId) {
-          const title = response.thread?.title || "Nova conversa";
+          const title = response.thread?.title || t("chat.threadFallback");
           setThreadOptions((current) => {
             const next = current.filter((item) => item.id !== threadId);
             return [{ id: threadId, label: title }, ...next];
           });
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Erro ao enviar mensagem");
+        setError(err instanceof Error ? err.message : t("chat.sendError"));
       } finally {
         setSending(false);
       }
     },
-    [activeThreadId]
+    [activeThreadId, t]
   );
 
   async function handleThreadChange(nextThreadId: string) {
@@ -114,7 +117,7 @@ export function DomainChatWidget() {
     try {
       await loadMessages(nextThreadId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao carregar mensagens");
+      setError(err instanceof Error ? err.message : t("chat.loadError"));
     } finally {
       setBooting(false);
     }
@@ -126,33 +129,37 @@ export function DomainChatWidget() {
     try {
       const created = await sentimentApi.createChatThread();
       const threadId = created.item.thread_id || created.item.id;
-      const option = { id: threadId, label: created.item.title || "Nova conversa" };
+      const option = { id: threadId, label: created.item.title || t("chat.threadFallback") };
       setThreadOptions((current) => [option, ...current]);
       setActiveThreadId(threadId);
       setMessages([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao criar nova conversa");
+      setError(err instanceof Error ? err.message : t("chat.createError"));
     } finally {
       setBooting(false);
     }
   }
+
+  if (!CHAT_ENABLED) return null;
 
   const localePrefix = settings.locale === "en-US" ? "EN" : "PT";
 
   return (
     <>
       {open ? (
-        <div className="fixed bottom-22 right-4 z-50 w-[calc(100vw-2rem)] max-w-[420px] rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="fixed bottom-22 right-4 z-50 w-[calc(100vw-2rem)] max-w-[420px] rounded-lg border border-border bg-card shadow-2xl">
           <header className="flex items-center justify-between border-b border-border px-3 py-2">
             <div>
               <p className="text-sm font-semibold">{t("chat.title")}</p>
-              <p className="text-xs text-muted-foreground">{localePrefix} · Domain locked</p>
+              <p className="text-xs text-muted-foreground">
+                {localePrefix} - {t("chat.domainLocked")}
+              </p>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => void bootstrap()} className="icon-btn" title="Atualizar contexto">
+              <button onClick={() => void bootstrap()} className="icon-btn" title={t("chat.refreshContext")}>
                 <RefreshCw size={16} />
               </button>
-              <button onClick={() => setOpen(false)} className="icon-btn" title="Fechar">
+              <button onClick={() => setOpen(false)} className="icon-btn" title={t("common.close")}>
                 <X size={16} />
               </button>
             </div>
@@ -171,7 +178,7 @@ export function DomainChatWidget() {
                 </option>
               ))}
             </select>
-            <button onClick={() => void handleCreateThread()} className="icon-btn" title="Nova conversa">
+            <button onClick={() => void handleCreateThread()} className="icon-btn" title={t("chat.newConversation")}>
               <Plus size={16} />
             </button>
           </div>
@@ -189,24 +196,12 @@ export function DomainChatWidget() {
             placeholder={t("chat.placeholder")}
             className="rounded-none border-none shadow-none"
             height="430px"
-            suggestedPrompts={
-              settings.locale === "en-US"
-                ? [
-                    "How do I read critical mentions?",
-                    "Where can I change language settings?",
-                    "How is the reputation score calculated?",
-                  ]
-                : [
-                    "Como interpreto as mencoes criticas?",
-                    "Onde altero idioma e tema?",
-                    "Como o score de reputacao e calculado?",
-                  ]
-            }
-            emptyStateMessage={
-              settings.locale === "en-US"
-                ? "I can help with SentimentoIA features and your authorized account data."
-                : "Posso ajudar com funcionalidades do SentimentoIA e dados autorizados da sua conta."
-            }
+            suggestedPrompts={[
+              t("chat.promptCritical"),
+              t("chat.promptSettings"),
+              t("chat.promptScore"),
+            ]}
+            emptyStateMessage={t("chat.emptyState")}
           />
         </div>
       ) : null}
@@ -216,7 +211,7 @@ export function DomainChatWidget() {
         className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border border-border bg-card px-4 py-3 shadow-xl transition hover:-translate-y-0.5"
       >
         <MessageSquareText size={18} />
-        <span className="text-sm font-semibold">Chat IA</span>
+        <span className="text-sm font-semibold">{t("chat.launcher")}</span>
       </button>
     </>
   );
