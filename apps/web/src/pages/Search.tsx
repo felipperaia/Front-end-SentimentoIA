@@ -10,7 +10,7 @@ export default function SearchPage() {
   const { t } = useAppSettings();
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
-  const [selectedSources, setSelectedSources] = useState<ScrapeSource[]>(["reclameaqui", "reddit", "mastodon"]);
+  const [selectedSources, setSelectedSources] = useState<ScrapeSource[]>(["reclameaqui", "reddit", "web"]);
   const [limitPerSource, setLimitPerSource] = useState(5);
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ScrapeResponse | null>(null);
@@ -18,7 +18,6 @@ export default function SearchPage() {
   const sources: Array<{ id: ScrapeSource; name: string; icon: string }> = [
     { id: "reclameaqui", name: "Reclame Aqui", icon: "RA" },
     { id: "reddit", name: "Reddit", icon: "R" },
-    { id: "mastodon", name: "Mastodon", icon: "M" },
     { id: "web", name: "Web Aberto", icon: "W" },
   ];
 

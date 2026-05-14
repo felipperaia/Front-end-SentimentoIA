@@ -1,6 +1,6 @@
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { sentimentApi, type ChatMessage, type ChatThread } from "@/lib/api";
-import { MessageSquareText, Plus, RefreshCw, X } from "lucide-react";
+import { MessageSquareText, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AIChatBox, type Message } from "./AIChatBox";
 
@@ -11,9 +11,15 @@ type ThreadOption = {
 
 const CHAT_ENABLED = String(import.meta.env.VITE_ENABLE_CHAT ?? "true") !== "false";
 
+function normalizeMessageRole(role: ChatMessage["role"]): Message["role"] {
+  if (role === "assistant") return "assistant";
+  if (role === "system") return "system";
+  return "user";
+}
+
 function mapMessages(items: ChatMessage[]): Message[] {
   return items.map((item) => ({
-    role: item.role === "assistant" ? "assistant" : item.role === "system" ? "system" : "user",
+    role: normalizeMessageRole(item.role),
     content: item.content,
   }));
 }
@@ -30,9 +36,12 @@ export function DomainChatWidget() {
   const [open, setOpen] = useState(false);
   const [booting, setBooting] = useState(false);
   const [sending, setSending] = useState(false);
+  const [deletingThread, setDeletingThread] = useState(false);
+  const [deletingMessage, setDeletingMessage] = useState(false);
   const [error, setError] = useState("");
   const [threadOptions, setThreadOptions] = useState<ThreadOption[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [backendMessages, setBackendMessages] = useState<ChatMessage[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
 
   const ensureActiveThread = useCallback(async () => {
@@ -53,7 +62,9 @@ export function DomainChatWidget() {
 
   const loadMessages = useCallback(async (threadId: string) => {
     const response = await sentimentApi.listChatMessages(threadId, 120);
-    setMessages(mapMessages(response.items || []));
+    const items = response.items || [];
+    setBackendMessages(items);
+    setMessages(mapMessages(items));
   }, []);
 
   const bootstrap = useCallback(async () => {
@@ -84,14 +95,9 @@ export function DomainChatWidget() {
 
       setError("");
       setSending(true);
-      setMessages((current) => [...current, { role: "user", content: trimmed }]);
 
       try {
         const response = await sentimentApi.sendChatMessage(activeThreadId, trimmed);
-        const assistantText = response.assistant_message?.content || "";
-        if (assistantText) {
-          setMessages((current) => [...current, { role: "assistant", content: assistantText }]);
-        }
 
         const threadId = response.thread?.thread_id || response.thread?.id;
         if (threadId) {
@@ -100,6 +106,10 @@ export function DomainChatWidget() {
             const next = current.filter((item) => item.id !== threadId);
             return [{ id: threadId, label: title }, ...next];
           });
+          setActiveThreadId(threadId);
+          await loadMessages(threadId);
+        } else {
+          await loadMessages(activeThreadId);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : t("chat.sendError"));
@@ -107,7 +117,7 @@ export function DomainChatWidget() {
         setSending(false);
       }
     },
-    [activeThreadId, t]
+    [activeThreadId, loadMessages, t]
   );
 
   async function handleThreadChange(nextThreadId: string) {
@@ -132,6 +142,7 @@ export function DomainChatWidget() {
       const option = { id: threadId, label: created.item.title || t("chat.threadFallback") };
       setThreadOptions((current) => [option, ...current]);
       setActiveThreadId(threadId);
+      setBackendMessages([]);
       setMessages([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("chat.createError"));
@@ -140,9 +151,75 @@ export function DomainChatWidget() {
     }
   }
 
+  async function handleDeleteThread() {
+    if (!activeThreadId || deletingThread || booting || sending || deletingMessage) return;
+
+    const confirmDelete = globalThis.confirm(
+      settings.locale === "en-US"
+        ? "Do you want to delete this conversation?"
+        : "Deseja apagar esta conversa?"
+    );
+    if (!confirmDelete) return;
+
+    setDeletingThread(true);
+    setError("");
+
+    try {
+      await sentimentApi.deleteChatThread(activeThreadId);
+
+      const remaining = threadOptions.filter((item) => item.id !== activeThreadId);
+      setThreadOptions(remaining);
+
+      if (remaining.length > 0) {
+        const nextThreadId = remaining[0].id;
+        setActiveThreadId(nextThreadId);
+        await loadMessages(nextThreadId);
+      } else {
+        setActiveThreadId(null);
+        setBackendMessages([]);
+        setMessages([]);
+        await handleCreateThread();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("chat.loadError"));
+    } finally {
+      setDeletingThread(false);
+    }
+  }
+
+  async function handleDeleteLastMessage() {
+    if (!activeThreadId || deletingMessage || booting || sending || deletingThread) return;
+
+    const lastMessage = [...backendMessages]
+      .reverse()
+      .find((item) => item.role !== "system" && (item.message_id || item.id));
+    const messageId = lastMessage?.message_id || lastMessage?.id;
+    if (!messageId) return;
+
+    const confirmDelete = globalThis.confirm(
+      settings.locale === "en-US"
+        ? "Do you want to delete the last message from this conversation?"
+        : "Deseja apagar a ultima mensagem desta conversa?"
+    );
+    if (!confirmDelete) return;
+
+    setDeletingMessage(true);
+    setError("");
+
+    try {
+      await sentimentApi.deleteChatMessage(activeThreadId, messageId);
+      await loadMessages(activeThreadId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("chat.loadError"));
+    } finally {
+      setDeletingMessage(false);
+    }
+  }
+
   if (!CHAT_ENABLED) return null;
 
   const localePrefix = settings.locale === "en-US" ? "EN" : "PT";
+  const hasDeletableMessage = backendMessages.some((item) => item.role !== "system" && (item.message_id || item.id));
 
   return (
     <>
@@ -181,11 +258,30 @@ export function DomainChatWidget() {
             <button onClick={() => void handleCreateThread()} className="icon-btn" title={t("chat.newConversation")}>
               <Plus size={16} />
             </button>
+            <button
+              onClick={() => void handleDeleteLastMessage()}
+              className="icon-btn"
+              title={settings.locale === "en-US" ? "Delete last message" : "Apagar ultima mensagem"}
+              disabled={booting || sending || deletingThread || deletingMessage || !activeThreadId || !hasDeletableMessage}
+            >
+              <Trash2 size={16} />
+            </button>
+            <button
+              onClick={() => void handleDeleteThread()}
+              className="icon-btn text-rose-600"
+              title={settings.locale === "en-US" ? "Delete conversation" : "Apagar conversa"}
+              disabled={booting || sending || deletingThread || deletingMessage || !activeThreadId}
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
 
           {error ? (
             <div className="border-b border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
-              {error}
+              <div className="mb-2">{error}</div>
+              <button className="secondary-btn h-8 px-3 py-1 text-xs" onClick={() => void bootstrap()}>
+                {settings.locale === "en-US" ? "Retry" : "Tentar novamente"}
+              </button>
             </div>
           ) : null}
 

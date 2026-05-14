@@ -103,7 +103,6 @@ export default function Dashboard() {
           <button onClick={() => setIsDataModalOpen(true)} className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30">
             Gerenciar Dados
           </button>
-          <button onClick={() => setIsDataModalOpen(true)} className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30">Gerenciar Dados</button>
           <button onClick={() => setLocation("/search")} className="secondary-btn">
             {t("dashboard.newSearch")}
           </button>

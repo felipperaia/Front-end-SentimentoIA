@@ -1,9 +1,25 @@
 import { translate, type TranslationKey } from "@/lib/i18n";
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const configuredApiBaseUrl = String(import.meta.env.VITE_API_URL || "")
+  .trim()
+  .replace(/\/+$/, "");
+const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 20000);
+const configuredRetryAttempts = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS || 2);
+const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS || 700);
+
+export const API_BASE_URL = configuredApiBaseUrl;
 export const AUTH_TOKEN_KEY = "sentimentoia_access_token";
 export const AUTH_USER_KEY = "sentimentoia_user";
 const SETTINGS_STORAGE_KEY = "sentimentoia_preferences";
+const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs)
+  ? Math.max(1000, configuredApiTimeoutMs)
+  : 20000;
+const API_RETRY_ATTEMPTS = Number.isFinite(configuredRetryAttempts)
+  ? Math.max(0, Math.min(5, configuredRetryAttempts))
+  : 2;
+const API_RETRY_DELAY_MS = Number.isFinite(configuredRetryDelayMs)
+  ? Math.max(100, configuredRetryDelayMs)
+  : 700;
 
 export type AuthUser = {
   id?: string;
@@ -53,11 +69,106 @@ function tApi(key: TranslationKey) {
   return translate(getCurrentLocale(), key);
 }
 
+function ensureApiBaseUrl(): string {
+  if (!API_BASE_URL) {
+    throw new Error(tApi("api.missingBaseUrl"));
+  }
+  return API_BASE_URL;
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+function buildAuthHeaders(options: RequestInit, token: string | null): Headers {
+  const headers = new Headers(options.headers);
+
+  if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return headers;
+}
+
+function shouldRetryStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+async function requestWithRetry(path: string, options: RequestInit = {}): Promise<Response> {
+  const apiBaseUrl = ensureApiBaseUrl();
+  const token = getToken();
+  const url = `${apiBaseUrl}${path}`;
+
+  let lastNetworkError: unknown = null;
+
+  for (let attempt = 0; attempt <= API_RETRY_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: buildAuthHeaders(options, token),
+        signal: controller.signal,
+      });
+
+      if (response.status === 401) {
+        clearAuthSession();
+      }
+
+      if (!response.ok && shouldRetryStatus(response.status) && attempt < API_RETRY_ATTEMPTS) {
+        await wait(API_RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+
+      return response;
+    } catch (err) {
+      lastNetworkError = err;
+
+      if (attempt < API_RETRY_ATTEMPTS) {
+        await wait(API_RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  if (lastNetworkError instanceof DOMException && lastNetworkError.name === "AbortError") {
+    throw new Error(tApi("api.requestError"));
+  }
+
+  if (lastNetworkError instanceof Error) {
+    throw new Error(lastNetworkError.message || tApi("api.requestError"));
+  }
+
+  throw new Error(tApi("api.requestError"));
+}
+
+async function parseResponseJson(response: Response): Promise<any> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export type ChatThread = {
   id: string;
   thread_id: string;
   title: string;
-  locale?: AppLocale | string;
+  locale?: string;
   archived?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -100,27 +211,8 @@ export function getStoredUser(): AuthUser | null {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
-  const headers = new Headers(options.headers);
-
-  if (!headers.has("Content-Type") && options.body) {
-    headers.set("Content-Type", "application/json");
-  }
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (response.status === 401) {
-    clearAuthSession();
-  }
-
-  const contentType = response.headers.get("content-type") ?? "";
-  const data = contentType.includes("application/json") ? await response.json() : null;
+  const response = await requestWithRetry(path, options);
+  const data = await parseResponseJson(response);
 
   if (!response.ok) {
     const detail = data?.detail;
@@ -128,6 +220,18 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   return data as T;
+}
+
+async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const response = await requestWithRetry(path, options);
+
+  if (!response.ok) {
+    const data = await parseResponseJson(response);
+    const detail = data?.detail;
+    throw new Error(typeof detail === "string" ? detail : tApi("api.reportError"));
+  }
+
+  return response.blob();
 }
 
 export const authApi = {
@@ -252,8 +356,18 @@ export type InsightItem = {
   job_id?: string;
   user_id?: string;
   batch_id?: string;
+  context_id?: string;
+  context_type?: string;
+  company?: string;
   trigger?: string;
   archived?: boolean;
+  priority?: string;
+  urgency?: string;
+  root_cause?: string;
+  recommended_action?: string;
+  status?: string;
+  resolution?: string;
+  timestamp?: string;
   executive_summary?: string;
   sentiment_overview?: string;
   risks?: string[];
@@ -292,10 +406,10 @@ export type SearchResponse = {
   errors?: Array<{ source?: string; error?: string } | string>;
 };
 
-export type ScrapeSource = "reclameaqui" | "reddit" | "mastodon" | "web" | "google" | "x" | "twitter";
+export type ScrapeSource = "reclameaqui" | "reddit" | "web";
 
 export type ScrapeItem = {
-  source: ScrapeSource | string;
+  source: string;
   title: string;
   url: string;
   snippet: string;
@@ -360,11 +474,19 @@ export const sentimentApi = {
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiFetch<Mention[]>(`/api/mentions${suffix}`);
   },
-  insights(params?: { batch_id?: string; include_archived?: boolean; limit?: number }) {
+  insights(params?: {
+    batch_id?: string;
+    include_archived?: boolean;
+    limit?: number;
+    priority?: string;
+    resolution?: string;
+  }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
     if (params?.include_archived) query.set("include_archived", "true");
     if (params?.limit) query.set("limit", String(params.limit));
+    if (params?.priority) query.set("priority", params.priority);
+    if (params?.resolution) query.set("resolution", params.resolution);
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiFetch<InsightsResponse>(`/api/insights${suffix}`);
   },
@@ -425,6 +547,20 @@ export const sentimentApi = {
       body: JSON.stringify({ content }),
     });
   },
+  deleteChatThread(threadId: string) {
+    return apiFetch<{ ok: boolean }>(`/api/chat/threads/${encodeURIComponent(threadId)}`, {
+      method: "DELETE",
+    });
+  },
+  deleteChatMessage(threadId: string, messageId: string) {
+    return apiFetch<{ ok: boolean }>(
+      `/api/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
+      { method: "DELETE" }
+    );
+  },
+  deleteAllChatThreads() {
+    return apiFetch<{ ok: boolean }>("/api/chat/threads", { method: "DELETE" });
+  },
   analyze(payload: { text: string; brand_name?: string; source?: string }) {
     return apiFetch<Mention>("/api/analyze", {
       method: "POST",
@@ -454,13 +590,16 @@ export const sentimentApi = {
     return apiFetch<NpsMetrics>(`/api/nps/metrics${suffix}`);
   },
   deleteConversation(id: string) {
-    return apiFetch<{ ok: boolean }>(`/api/conversations/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return apiFetch<{ ok: boolean }>(`/api/chat/threads/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
   deleteMessage(threadId: string, messageId: string) {
-    return apiFetch<{ ok: boolean }>(`/api/conversations/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`, { method: "DELETE" });
+    return apiFetch<{ ok: boolean }>(
+      `/api/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
+      { method: "DELETE" }
+    );
   },
   deleteAllConversations() {
-    return apiFetch<{ ok: boolean }>("/api/conversations/all", { method: "DELETE" });
+    return apiFetch<{ ok: boolean }>("/api/chat/threads", { method: "DELETE" });
   },
   deleteSearch(id: string) {
     return apiFetch<{ ok: boolean }>(`/api/searches/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -477,20 +616,32 @@ export const sentimentApi = {
 };
 
 export async function downloadReport(format: "csv" | "pdf") {
-  const token = getToken();
-  const response = await fetch(`${API_BASE_URL}/api/reports/export/${format}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-
-  if (!response.ok) {
-    throw new Error(tApi("api.reportError"));
-  }
-
-  const blob = await response.blob();
+  const blob = await apiFetchBlob(`/api/reports/export/${format}`);
   const url = globalThis.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = format === "csv" ? "relatorio_sentimento.csv" : "relatorio_sentimento.pdf";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  globalThis.URL.revokeObjectURL(url);
+}
+
+export async function downloadInsightsReport(
+  format: "markdown" | "pdf",
+  params?: { priority?: string; resolution?: string; limit?: number }
+) {
+  const query = new URLSearchParams();
+  if (params?.priority) query.set("priority", params.priority);
+  if (params?.resolution) query.set("resolution", params.resolution);
+  if (params?.limit) query.set("limit", String(params.limit));
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const blob = await apiFetchBlob(`/api/insights/export/${format}${suffix}`);
+  const url = globalThis.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = format === "markdown" ? "insights.md" : "insights.pdf";
   document.body.appendChild(link);
   link.click();
   link.remove();

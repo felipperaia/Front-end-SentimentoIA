@@ -218,8 +218,8 @@ export const TRANSLATIONS = {
     "en-US": "Multi-channel collection",
   },
   "home.featureCollectionText": {
-    "pt-BR": "Busque menções em Reddit, Reclame Aqui, Mastodon e Web aberto com coleta incremental.",
-    "en-US": "Search mentions across Reddit, Reclame Aqui, Mastodon, and open Web with incremental collection.",
+    "pt-BR": "Busque menções em Reddit, Reclame Aqui e Web aberto com coleta incremental.",
+    "en-US": "Search mentions across Reddit, Reclame Aqui, and open Web with incremental collection.",
   },
   "home.featureAiTitle": {
     "pt-BR": "Leitura de criticidade",
@@ -614,8 +614,8 @@ export const TRANSLATIONS = {
     "en-US": "Select at least one source to start the search.",
   },
   "search.emptyResult": {
-    "pt-BR": "Busca concluída, mas nenhuma fonte retornou dados novos. Verifique Reddit, Reclame Aqui, Mastodon ou Web aberto.",
-    "en-US": "Search completed, but no source returned new data. Check Reddit, Reclame Aqui, Mastodon, or open Web.",
+    "pt-BR": "Busca concluida, mas nenhuma fonte retornou dados novos. Verifique Reddit, Reclame Aqui ou Web aberto.",
+    "en-US": "Search completed, but no source returned new data. Check Reddit, Reclame Aqui, or open Web.",
   },
   "search.error": {
     "pt-BR": "Erro na busca.",
@@ -1196,6 +1196,10 @@ export const TRANSLATIONS = {
   "api.reportError": {
     "pt-BR": "Erro ao gerar relatório",
     "en-US": "Unable to generate report",
+  },
+  "api.missingBaseUrl": {
+    "pt-BR": "VITE_API_URL não está definido. Configure o endpoint público do backend.",
+    "en-US": "VITE_API_URL is not set. Configure the backend public endpoint.",
   },
 } as const satisfies Record<string, LocaleMap>;
 

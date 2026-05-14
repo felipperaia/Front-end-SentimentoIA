@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
-  Archive,
   Brain,
   Clock3,
   RefreshCw,
@@ -12,6 +11,10 @@ import {
 } from "lucide-react";
 import { InsightItem, sentimentApi } from "@/lib/api";
 
+function resolveInsightId(item: InsightItem): string {
+  return item.insight_id || item.id;
+}
+
 export default function AnalysisPage() {
   const { settings, t } = useAppSettings();
   const [items, setItems] = useState<InsightItem[]>([]);
@@ -19,13 +22,20 @@ export default function AnalysisPage() {
   const [processing, setProcessing] = useState(false);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  const [resolutionFilter, setResolutionFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
   const [error, setError] = useState("");
 
   async function loadInsights(include = includeArchived) {
     setLoading(true);
     setError("");
     try {
-      const response = await sentimentApi.insights({ include_archived: include, limit: 100 });
+      const response = await sentimentApi.insights({
+        include_archived: include,
+        limit: 100,
+        priority: priorityFilter === "all" ? undefined : priorityFilter,
+        resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
+      });
       setItems(response.items ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("analysis.loadError"));
@@ -36,7 +46,7 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     void loadInsights();
-  }, [includeArchived]);
+  }, [includeArchived, priorityFilter, resolutionFilter]);
 
   async function handleGenerate() {
     setProcessing(true);
@@ -51,13 +61,11 @@ export default function AnalysisPage() {
     }
   }
 
-  async function runItemAction(insightId: string, action: "archive" | "delete" | "regenerate") {
+  async function runItemAction(insightId: string, action: "delete" | "regenerate") {
     setActiveActionId(insightId);
     setError("");
     try {
-      if (action === "archive") {
-        await sentimentApi.archiveInsight(insightId);
-      } else if (action === "delete") {
+      if (action === "delete") {
         await sentimentApi.deleteInsight(insightId);
       } else {
         await sentimentApi.regenerateInsight(insightId);
@@ -76,7 +84,10 @@ export default function AnalysisPage() {
   } else if (error) {
     content = (
       <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
-        {error}
+        <p className="mb-3">{error}</p>
+        <button onClick={() => void loadInsights()} className="secondary-btn">
+          <RefreshCw size={16} /> {t("common.refresh")}
+        </button>
       </div>
     );
   } else if (items.length === 0) {
@@ -96,16 +107,23 @@ export default function AnalysisPage() {
     content = (
       <section className="space-y-4">
         {items.map((item) => {
-          const isRunning = activeActionId === item.id;
+          const insightId = resolveInsightId(item);
+          const isRunning = activeActionId === insightId;
           return (
-            <article key={item.id} className="app-panel p-5 md:p-6">
+            <article key={insightId} className="app-panel p-5 md:p-6">
               <header className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">{item.executive_summary || t("analysis.untitled")}</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span className="badge-chip">{item.trend || t("analysis.undefinedTrend")}</span>
-                    <span className="badge-chip">{t("analysis.batch")}: {item.batch_id || "-"}</span>
+                    <span className="badge-chip">Contexto: {item.context_id || item.batch_id || "-"}</span>
                     <span className="badge-chip">{t("analysis.trigger")}: {item.trigger || t("analysis.manual")}</span>
+                    <span className={priorityBadgeClass(item.priority)}>
+                      Prioridade: {priorityLabel(item.priority)}
+                    </span>
+                    <span className="badge-chip">Urgência: {urgencyLabel(item.urgency)}</span>
+                    <span className="badge-chip">Status: {statusLabel(item.status)}</span>
+                    <span className="badge-chip">Resolução: {resolutionLabel(item.resolution)}</span>
                     {item.archived ? <span className="badge-chip">{t("analysis.archived")}</span> : null}
                   </div>
                 </div>
@@ -123,7 +141,7 @@ export default function AnalysisPage() {
                   <h3 className="mb-2 text-sm uppercase text-muted-foreground">{t("analysis.risks")}</h3>
                   <ul className="space-y-1 text-sm">
                     {(item.risks && item.risks.length > 0 ? item.risks : [t("analysis.noRisks")]).map((risk, idx) => (
-                      <li key={`${item.id}-risk-${idx}`}>{idx + 1}. {risk}</li>
+                      <li key={`${insightId}-risk-${idx}`}>{idx + 1}. {risk}</li>
                     ))}
                   </ul>
                 </div>
@@ -134,7 +152,7 @@ export default function AnalysisPage() {
                       ? item.recommended_actions
                       : [t("analysis.noActions")]
                     ).map((action, idx) => (
-                      <li key={`${item.id}-action-${idx}`}>{idx + 1}. {action}</li>
+                      <li key={`${insightId}-action-${idx}`}>{idx + 1}. {action}</li>
                     ))}
                   </ul>
                 </div>
@@ -145,27 +163,36 @@ export default function AnalysisPage() {
                 <p>{item.decision_guidance || t("analysis.noGuidance")}</p>
               </div>
 
+              <div className="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="rounded-xl border border-border/70 bg-background/75 p-4">
+                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Empresa</h3>
+                  <p>{item.company || "-"}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/75 p-4">
+                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Timestamp</h3>
+                  <p>{item.timestamp || formatDate(item.created_at, settings.locale, t)}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/75 p-4">
+                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Causa raiz</h3>
+                  <p>{item.root_cause || "Não informado"}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/75 p-4">
+                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Ação recomendada</h3>
+                  <p>{item.recommended_action || "Não informado"}</p>
+                </div>
+              </div>
+
               <footer className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => runItemAction(item.id, "regenerate")}
+                  onClick={() => runItemAction(insightId, "regenerate")}
                   disabled={isRunning}
                   className="secondary-btn"
                 >
                   <Wand2 size={16} /> {isRunning ? t("common.processing") : t("analysis.regenerate")}
                 </button>
 
-                {!item.archived && (
-                  <button
-                    onClick={() => runItemAction(item.id, "archive")}
-                    disabled={isRunning}
-                    className="secondary-btn"
-                  >
-                    <Archive size={16} /> {t("analysis.archive")}
-                  </button>
-                )}
-
                 <button
-                  onClick={() => runItemAction(item.id, "delete")}
+                  onClick={() => runItemAction(insightId, "delete")}
                   disabled={isRunning}
                   className="rounded-xl border border-rose-300 px-4 py-2 text-rose-700 transition hover:bg-rose-100 dark:border-rose-700 dark:text-rose-200 dark:hover:bg-rose-900/30"
                 >
@@ -194,15 +221,47 @@ export default function AnalysisPage() {
         </>
       }
     >
-      <div className="mb-5 flex items-center gap-3 rounded-xl border border-border/70 bg-card/80 p-3 text-sm">
-        <input
-          id="show-archived"
-          type="checkbox"
-          checked={includeArchived}
-          onChange={(event) => setIncludeArchived(event.target.checked)}
-          className="h-4 w-4"
-        />
-        <label htmlFor="show-archived">{t("analysis.showArchived")}</label>
+      <div className="mb-5 grid gap-3 rounded-xl border border-border/70 bg-card/80 p-3 text-sm md:grid-cols-3">
+        <label className="flex items-center gap-2">
+          <input
+            id="show-archived"
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(event) => setIncludeArchived(event.target.checked)}
+            className="h-4 w-4"
+          />
+          <span>{t("analysis.showArchived")}</span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="text-muted-foreground">Prioridade:</span>
+          <select
+            className="field-input h-9 py-1"
+            value={priorityFilter}
+            onChange={(event) => setPriorityFilter(event.target.value as "all" | "high" | "medium" | "low")}
+          >
+            <option value="all">Todas</option>
+            <option value="high">Alta</option>
+            <option value="medium">Média</option>
+            <option value="low">Baixa</option>
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="text-muted-foreground">Resolução:</span>
+          <select
+            className="field-input h-9 py-1"
+            value={resolutionFilter}
+            onChange={(event) =>
+              setResolutionFilter(event.target.value as "all" | "pending" | "in_progress" | "resolved")
+            }
+          >
+            <option value="all">Todas</option>
+            <option value="pending">Pendente</option>
+            <option value="in_progress">Em andamento</option>
+            <option value="resolved">Resolvido</option>
+          </select>
+        </label>
       </div>
 
       {content}
@@ -215,4 +274,43 @@ function formatDate(raw: string | undefined, locale: string, t: ReturnType<typeo
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return t("analysis.dateInvalid");
   return date.toLocaleString(locale);
+}
+
+function priorityLabel(priority: string | undefined) {
+  const normalized = String(priority || "medium").toLowerCase();
+  if (normalized === "high") return "Alta";
+  if (normalized === "low" || normalized === "ok") return "Baixa/OK";
+  return "Média";
+}
+
+function urgencyLabel(urgency: string | undefined) {
+  const normalized = String(urgency || "medium").toLowerCase();
+  if (normalized === "high") return "Alta";
+  if (normalized === "low") return "Baixa";
+  return "Média";
+}
+
+function statusLabel(status: string | undefined) {
+  const normalized = String(status || "open").toLowerCase();
+  if (normalized === "resolved") return "Resolvido";
+  if (normalized === "in_progress") return "Em andamento";
+  return "Aberto";
+}
+
+function resolutionLabel(resolution: string | undefined) {
+  const normalized = String(resolution || "pending").toLowerCase();
+  if (normalized === "resolved") return "Resolvido";
+  if (normalized === "in_progress") return "Em andamento";
+  return "Pendente";
+}
+
+function priorityBadgeClass(priority: string | undefined) {
+  const normalized = String(priority || "medium").toLowerCase();
+  if (normalized === "high") {
+    return "badge-chip border border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200";
+  }
+  if (normalized === "low" || normalized === "ok") {
+    return "badge-chip border border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200";
+  }
+  return "badge-chip border border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200";
 }

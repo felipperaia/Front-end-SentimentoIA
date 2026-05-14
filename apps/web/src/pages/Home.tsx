@@ -117,8 +117,8 @@ export default function Home() {
             </div>
 
             <div className="mt-12 grid gap-3 sm:grid-cols-3">
-              <HeroMetric label={t("home.metricMentions")} value="Reclame Aqui · Reddit · Mastodon" />
-              <HeroMetric label={t("home.metricInsights")} value="LLM" />
+              <HeroMetric label={t("home.metricMentions")} value="Reclame Aqui · Reddit · Web" />
+              <HeroMetric label={t("home.metricInsights")} value="Backend API" />
               <HeroMetric label={t("home.metricReports")} value="CSV · PDF" />
             </div>
           </div>
@@ -204,7 +204,7 @@ export default function Home() {
   );
 }
 
-function HeroMetric({ label, value }: { label: string; value: string }) {
+function HeroMetric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="hero-metric">
       <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
