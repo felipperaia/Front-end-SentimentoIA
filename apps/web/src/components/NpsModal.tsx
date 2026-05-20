@@ -59,8 +59,13 @@ export default function NpsModal() {
 
     try {
       const { should_show, trigger } = await sentimentApi.npsCheck(nextSessionId);
-      if (!should_show) return;
-      if (trigger && trigger !== "post_search") return;
+      if (!should_show || (trigger && trigger !== "post_search")) {
+        if (delayedOpenRef.current !== null) {
+          globalThis.clearTimeout(delayedOpenRef.current);
+          delayedOpenRef.current = null;
+        }
+        return;
+      }
 
       if (delayedOpenRef.current !== null) {
         globalThis.clearTimeout(delayedOpenRef.current);

@@ -135,6 +135,13 @@ export function DomainChatWidget() { // NOSONAR
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : t("chat.sendError"));
+        if (activeThreadId) {
+          try {
+            await loadMessages(activeThreadId);
+          } catch {
+            // Mantem erro principal e evita sobrescrever o estado atual.
+          }
+        }
       } finally {
         setSending(false);
       }

@@ -204,7 +204,7 @@ export default function SearchPage() {
   }, [lastScrape?.results]);
 
   const searchErrors = [...(lastScrape?.errors ?? []), ...(lastResult?.errors ?? [])];
-  const effectiveStatus = (lastResult?.status || lastScrape?.status) as SearchResponse["status"] | undefined;
+  const effectiveStatus: SearchResponse["status"] | undefined = lastResult?.status || lastScrape?.status;
   const effectiveStatusSummary = lastResult?.status_summary || lastScrape?.status_summary;
   const effectiveTotal = lastResult?.total ?? lastScrape?.total ?? 0;
   const hasRunData = Boolean(lastResult || lastScrape);
@@ -408,7 +408,7 @@ export default function SearchPage() {
             </article>
           ) : null}
 
-          {lastResult ? (
+          {hasRunData ? (
             <article className="app-panel p-6 md:p-7">
               <h3 className="text-lg font-semibold">{t("search.resultsBySource")}</h3>
               <div className="mt-4 space-y-4">
@@ -528,6 +528,16 @@ export default function SearchPage() {
                         ? err
                         : `${err.source || "fonte"}-${err.error || "erro desconhecido"}`;
 
+                    const timeoutHint =
+                      typeof err !== "string" && err.timeout
+                        ? " (timeout)"
+                        : "";
+
+                    const reasonHint =
+                      typeof err !== "string" && err.reason && err.reason !== "timeout"
+                        ? ` (${err.reason})`
+                        : "";
+
                     return (
                     <div key={errorKey} className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
                       <div className="flex items-start gap-2">
@@ -535,7 +545,7 @@ export default function SearchPage() {
                         <span>
                           {typeof err === "string"
                             ? err
-                            : `${err.source || "fonte"}: ${err.error || "erro desconhecido"}`}
+                            : `${err.source || "fonte"}: ${err.error || "erro desconhecido"}${timeoutHint}${reasonHint}`}
                         </span>
                       </div>
                     </div>

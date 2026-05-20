@@ -3,7 +3,7 @@ import { translate, type TranslationKey } from "@/lib/i18n";
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_URL || "")
   .trim()
   .replace(/\/+$/, "");
-const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 20000);
+const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 60000);
 const configuredRetryAttempts = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS || 2);
 const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS || 700);
 
@@ -13,7 +13,7 @@ export const AUTH_USER_KEY = "sentimentoia_user";
 const SETTINGS_STORAGE_KEY = "sentimentoia_preferences";
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs)
   ? Math.max(1000, configuredApiTimeoutMs)
-  : 20000;
+  : 60000;
 const API_RETRY_ATTEMPTS = Number.isFinite(configuredRetryAttempts)
   ? Math.max(0, Math.min(5, configuredRetryAttempts))
   : 2;
@@ -86,6 +86,8 @@ function extractErrorDetail(payload: any): string {
   if (direct) return direct;
 
   const candidates = [
+    payload?.business_state?.actionable_message,
+    payload?.meta?.actionable_message,
     payload?.detail,
     payload?.message,
     payload?.error,
@@ -437,7 +439,9 @@ function normalizeInsight(item: unknown): InsightItem {
   };
 }
 
-function normalizeSearchErrors(errors: unknown): Array<{ source?: string; error?: string } | string> {
+function normalizeSearchErrors(
+  errors: unknown
+): Array<{ source?: string; error?: string; reason?: string; timeout?: boolean } | string> {
   return ensureArray<any>(errors)
     .map((entry) => {
       if (typeof entry === "string") {
@@ -447,7 +451,9 @@ function normalizeSearchErrors(errors: unknown): Array<{ source?: string; error?
       const raw = ensureObject(entry);
       const source = asString(raw.source || raw.name, "fonte");
       const error = asString(raw.error || raw.detail || raw.message, "Erro temporario na coleta");
-      return { source, error };
+      const reason = asNullableString(raw.reason);
+      const timeout = Boolean(raw.timeout) || reason === "timeout";
+      return { source, error, reason, timeout };
     })
     .filter(Boolean);
 }
@@ -1086,14 +1092,29 @@ export const sentimentApi = {
   },
   async mentions(params?: { batch_id?: string; search_id?: string; status?: string; sentiment?: string; limit?: number }) {
     const query = new URLSearchParams();
-    if (params?.batch_id) query.set("batch_id", params.batch_id);
-    if (params?.search_id) query.set("search_id", params.search_id);
-    if (params?.status) query.set("status", params.status);
-    if (params?.sentiment) query.set("sentiment", params.sentiment);
-    if (params?.limit !== undefined) query.set("limit", String(Math.max(1, Math.min(params.limit, 1000))));
+    const resolvedContextId = asNullableString(params?.batch_id) ?? asNullableString(params?.search_id);
+    if (resolvedContextId) {
+      query.set("batch_id", resolvedContextId);
+      query.set("search_id", resolvedContextId);
+    }
+
+    const resolvedStatus = asNullableString(params?.status);
+    if (resolvedStatus && resolvedStatus !== "all") query.set("status", resolvedStatus);
+
+    const resolvedSentiment = asNullableString(params?.sentiment);
+    if (resolvedSentiment && resolvedSentiment !== "all") query.set("sentiment", resolvedSentiment);
+
+    if (typeof params?.limit === "number" && Number.isFinite(params.limit)) {
+      query.set("limit", String(Math.max(1, Math.min(Math.round(params.limit), 1000))));
+    }
+
     const suffix = query.toString() ? `?${query.toString()}` : "";
     const raw = await apiFetch<any>(`/api/mentions${suffix}`);
-    return ensureArray<any>(raw).map(normalizeMention);
+    const payload = ensureObject(raw);
+    const items = Array.isArray(raw)
+      ? raw
+      : ensureArray<any>(payload.items || payload.mentions || payload.data);
+    return items.map(normalizeMention);
   },
   async insights(params?: {
     batch_id?: string;

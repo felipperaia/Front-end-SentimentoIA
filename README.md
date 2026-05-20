@@ -127,7 +127,7 @@ Base recomendada:
 
 ```env
 VITE_API_URL=http://localhost:8000
-VITE_API_TIMEOUT_MS=20000
+VITE_API_TIMEOUT_MS=60000
 VITE_API_RETRY_ATTEMPTS=2
 VITE_API_RETRY_DELAY_MS=700
 VITE_ENABLE_CHAT=true
@@ -212,6 +212,13 @@ Principais rotas utilizadas:
 - chat: /api/chat/*
 - NPS: /api/nps/*
 - privacidade: /api/privacy/*
+
+Contratos importantes consumidos pelo frontend:
+
+- `POST /api/search` e `POST /api/scrape` retornam `status` (`success|partial_success|empty|failed`) e `status_summary`
+- `GET /api/mentions` aceita `batch_id`/`search_id` (e aliases camelCase por compatibilidade)
+- `POST /api/insights/generate` pode retornar `400 threshold_not_met` como estado esperado de negocio
+- `POST /api/chat/threads/{thread_id}/messages` pode retornar `503` quando IA estiver indisponivel
 
 ## PWA
 

@@ -59,8 +59,7 @@ export default function ReportsPage() {
     setLastFailedExport(null);
 
     try {
-      const dateTag = new Date().toISOString().slice(0, 10);
-      const filename = searchId ? `relatorio-${searchId}-${dateTag}.${format}` : undefined;
+      const filename = searchId ? `relatorio-${searchId}.${format}` : undefined;
       await downloadReport(format, { filename, search_id: searchId || undefined });
     } catch (err) {
       setLastFailedExport(action);
