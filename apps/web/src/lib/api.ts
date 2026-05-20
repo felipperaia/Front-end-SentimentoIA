@@ -101,6 +101,21 @@ function extractErrorDetail(payload: any): string {
   return "";
 }
 
+function extractErrorCode(payload: any): string | undefined {
+  const candidates = [
+    payload?.code,
+    payload?.reason,
+    payload?.meta?.reason,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeErrorText(candidate);
+    if (normalized) return normalized;
+  }
+
+  return undefined;
+}
+
 function isAiUpstreamPath(path: string): boolean {
   return AI_UPSTREAM_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
@@ -537,6 +552,30 @@ export type ChatMessage = {
   created_at?: string;
 };
 
+export class ApiRequestError extends Error {
+  status?: number;
+  code?: string;
+  data?: any;
+  path: string;
+
+  constructor(
+    message: string,
+    params: {
+      path: string;
+      status?: number;
+      code?: string;
+      data?: any;
+    }
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.path = params.path;
+    this.status = params.status;
+    this.code = params.code;
+    this.data = params.data;
+  }
+}
+
 export function getToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY);
 }
@@ -568,14 +607,18 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   const data = await parseResponseJson(response);
 
   if (!response.ok) {
-    throw new Error(
-      resolveFriendlyErrorMessage({
-        path,
-        status: response.status,
-        detail: data,
-        fallbackKey: "api.requestError",
-      })
-    );
+    const message = resolveFriendlyErrorMessage({
+      path,
+      status: response.status,
+      detail: data,
+      fallbackKey: "api.requestError",
+    });
+    throw new ApiRequestError(message, {
+      path,
+      status: response.status,
+      code: extractErrorCode(data),
+      data,
+    });
   }
 
   return data as T;
@@ -586,14 +629,18 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<{ 
 
   if (!response.ok) {
     const data = await parseResponseJson(response);
-    throw new Error(
-      resolveFriendlyErrorMessage({
-        path,
-        status: response.status,
-        detail: data,
-        fallbackKey: "api.reportError",
-      })
-    );
+    const message = resolveFriendlyErrorMessage({
+      path,
+      status: response.status,
+      detail: data,
+      fallbackKey: "api.reportError",
+    });
+    throw new ApiRequestError(message, {
+      path,
+      status: response.status,
+      code: extractErrorCode(data),
+      data,
+    });
   }
 
   const blob = await response.blob();
@@ -768,16 +815,42 @@ export type NpsMetrics = {
   recent_comments: Array<{ comment: string; score: number; module_key: string; created_at: string }>;
 };
 
+export type ExecutionStatus = "success" | "partial_success" | "empty" | "failed";
+
+export type SourceExecutionStatus = {
+  source: string;
+  ok: boolean;
+  count: number;
+  error?: string | null;
+  reason?: string | null;
+  timeout?: boolean;
+};
+
+export type ExecutionStatusSummary = {
+  status: ExecutionStatus;
+  partial_success: boolean;
+  message?: string;
+  sources_requested?: number;
+  sources_with_data?: number;
+  sources_failed?: number;
+  timeout_sources?: string[];
+  source_status?: SourceExecutionStatus[];
+  unmapped_error_count?: number;
+};
+
 export type SearchResponse = {
   search_id: string;
   query?: string;
   cached?: boolean;
+  status?: ExecutionStatus;
+  partial_success?: boolean;
+  status_summary?: ExecutionStatusSummary;
   total: number;
   mentions: Mention[];
   metrics: Partial<DashboardMetrics>;
   llm_analysis?: any;
   alerts?: any[];
-  errors?: Array<{ source?: string; error?: string } | string>;
+  errors?: Array<{ source?: string; error?: string; reason?: string; timeout?: boolean } | string>;
 };
 
 export type ScrapeSource =
@@ -811,9 +884,12 @@ export type ScrapeResponse = {
   query: string;
   sources: string[];
   limit_per_source: number;
+  status?: ExecutionStatus;
+  partial_success?: boolean;
+  status_summary?: ExecutionStatusSummary;
   total: number;
   results: Record<string, ScrapeItem[]>;
-  errors: Array<{ source: string; error: string }>;
+  errors: Array<{ source: string; error: string; reason?: string; timeout?: boolean }>;
   metadata?: {
     incremental_mode?: boolean;
     max_total_items?: number;
@@ -853,6 +929,43 @@ export type IntegrationsStatusResponse = {
   llm?: Record<string, any>;
   external_source_apis_removed?: boolean;
 };
+
+function normalizeExecutionStatus(value: unknown, fallback: ExecutionStatus = "success"): ExecutionStatus {
+  const normalized = asString(value, "").toLowerCase();
+  if (normalized === "success" || normalized === "partial_success" || normalized === "empty" || normalized === "failed") {
+    return normalized;
+  }
+  return fallback;
+}
+
+function normalizeStatusSummary(value: unknown): ExecutionStatusSummary | undefined {
+  const raw = ensureObject(value);
+  if (Object.keys(raw).length === 0) return undefined;
+
+  const sourceStatus = ensureArray<any>(raw.source_status).map((entry) => {
+    const item = ensureObject(entry);
+    return {
+      source: asString(item.source, "unknown"),
+      ok: Boolean(item.ok),
+      count: asNumber(item.count, 0),
+      error: asNullableString(item.error) ?? null,
+      reason: asNullableString(item.reason) ?? null,
+      timeout: Boolean(item.timeout),
+    };
+  });
+
+  return {
+    status: normalizeExecutionStatus(raw.status, "success"),
+    partial_success: Boolean(raw.partial_success),
+    message: asNullableString(raw.message),
+    sources_requested: raw.sources_requested === undefined ? undefined : asNumber(raw.sources_requested, 0),
+    sources_with_data: raw.sources_with_data === undefined ? undefined : asNumber(raw.sources_with_data, 0),
+    sources_failed: raw.sources_failed === undefined ? undefined : asNumber(raw.sources_failed, 0),
+    timeout_sources: ensureArray<string>(raw.timeout_sources),
+    source_status: sourceStatus,
+    unmapped_error_count: raw.unmapped_error_count === undefined ? undefined : asNumber(raw.unmapped_error_count, 0),
+  };
+}
 
 export const sentimentApi = {
   async dashboard(params?: { batch_id?: string; period_days?: number; limit_mentions?: number }) {
@@ -895,11 +1008,18 @@ export const sentimentApi = {
 
     const data = ensureObject(raw);
     const mentions = ensureArray<any>(data.mentions).map(normalizeMention);
+    const statusSummary = normalizeStatusSummary(data.status_summary);
+    const fallbackStatus = mentions.length > 0 ? "success" : "empty";
+    const status = normalizeExecutionStatus(data.status || statusSummary?.status, fallbackStatus);
+    const partialSuccess = Boolean(data.partial_success ?? statusSummary?.partial_success ?? status === "partial_success");
 
     return {
       search_id: asString(data.search_id, ""),
       query: asNullableString(data.query || payload.brand_name || payload.query),
       cached: Boolean(data.cached),
+      status,
+      partial_success: partialSuccess,
+      status_summary: statusSummary,
       total: asNumber(data.total, mentions.length),
       mentions,
       metrics: normalizeDashboardMetrics(data.metrics, mentions),
@@ -935,25 +1055,42 @@ export const sentimentApi = {
       return {
         source: asString(item.source, "unknown"),
         error: asString(item.error || item.detail || item.message, "Falha temporaria na coleta da fonte"),
+        reason: asNullableString(item.reason),
+        timeout: Boolean(item.timeout),
       };
     });
+
+    const computedTotal = asNumber(data.total, Object.values(results).reduce((acc, items) => acc + items.length, 0));
+    let fallbackStatus: ExecutionStatus = "empty";
+    if (computedTotal > 0) {
+      fallbackStatus = errors.length > 0 ? "partial_success" : "success";
+    } else if (errors.length > 0) {
+      fallbackStatus = "failed";
+    }
+    const statusSummary = normalizeStatusSummary(data.status_summary);
+    const status = normalizeExecutionStatus(data.status || statusSummary?.status, fallbackStatus);
+    const partialSuccess = Boolean(data.partial_success ?? statusSummary?.partial_success ?? status === "partial_success");
 
     return {
       query: asString(data.query, payload.query),
       sources: ensureArray<string>(data.sources).length > 0 ? ensureArray<string>(data.sources) : requestedSources,
       limit_per_source: asNumber(data.limit_per_source, payload.limit_per_source || payload.limit || 5),
-      total: asNumber(data.total, Object.values(results).reduce((acc, items) => acc + items.length, 0)),
+      status,
+      partial_success: partialSuccess,
+      status_summary: statusSummary,
+      total: computedTotal,
       results,
       errors,
       metadata: ensureObject(data.metadata) as ScrapeResponse["metadata"],
     };
   },
-  async mentions(params?: { batch_id?: string; status?: string; sentiment?: string; limit?: number }) {
+  async mentions(params?: { batch_id?: string; search_id?: string; status?: string; sentiment?: string; limit?: number }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
+    if (params?.search_id) query.set("search_id", params.search_id);
     if (params?.status) query.set("status", params.status);
     if (params?.sentiment) query.set("sentiment", params.sentiment);
-    if (params?.limit) query.set("limit", String(params.limit));
+    if (params?.limit !== undefined) query.set("limit", String(Math.max(1, Math.min(params.limit, 1000))));
     const suffix = query.toString() ? `?${query.toString()}` : "";
     const raw = await apiFetch<any>(`/api/mentions${suffix}`);
     return ensureArray<any>(raw).map(normalizeMention);

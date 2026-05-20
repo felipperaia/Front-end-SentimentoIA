@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { sentimentApi, getToken } from "@/lib/api";
 import { MessageSquare, Star, X } from "lucide-react";
+import { toast } from "sonner";
 
 const SEARCH_COMPLETED_EVENT = "sentimentoia:search-completed";
 const NPS_HANDLED_KEY = "sentimentoia_nps_handled";
@@ -69,7 +70,7 @@ export default function NpsModal() {
         setVisible(true);
       }, 3000);
     } catch {
-      // Silencioso por requisito.
+      // Nao interrompe a navegação; apenas evita abertura indevida.
     } finally {
       checkingRef.current = false;
     }
@@ -103,12 +104,12 @@ export default function NpsModal() {
         module_key: "search",
         route: currentRoutePath(),
       });
-    } catch {
-      // Silencioso por requisito.
-    } finally {
       markNpsAsHandled();
       sessionStorage.removeItem(NPS_SESSION_ID_KEY);
       setVisible(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nao foi possivel enviar sua avaliacao agora. Tente novamente.");
+    } finally {
       setSending(false);
     }
   }
@@ -121,8 +122,9 @@ export default function NpsModal() {
           module_key: "search",
           route: currentRoutePath(),
         });
-      } catch {
-        // Silencioso por requisito.
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nao foi possivel registrar o adiamento agora. Tente novamente.");
+        return;
       }
     }
 

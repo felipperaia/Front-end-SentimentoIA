@@ -95,6 +95,8 @@ No arquivo apps/web/.env, configure:
 VITE_API_URL=http://localhost:8000
 ```
 
+Para deploy, use a URL publica do backend (ex.: `https://api.seudominio.com`) e evite valores `localhost`.
+
 ### 4) Subir o frontend
 
 Com npm:
@@ -144,6 +146,10 @@ Descrição das principais variáveis:
 - VITE_ENABLE_NPS: habilita/desabilita o modal de NPS
 - VITE_ENABLE_PWA: habilita/desabilita registro do service worker
 - VITE_PRIVACY_POLICY_URL: URL da política de privacidade
+
+Observacao:
+
+- o frontend nao possui fallback para localhost; a comunicacao depende explicitamente de `VITE_API_URL`
 
 ## Scripts Disponíveis
 

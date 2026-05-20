@@ -24,9 +24,9 @@ function normalizeMessageRole(role: ChatMessage["role"]): Message["role"] {
 
 function mapMessages(items: ChatMessage[]): Message[] {
   return items
-    .filter((item) => Boolean(item?.id || item?.message_id))
-    .map((item) => ({
-      id: item.message_id || item.id,
+    .filter((item) => Boolean(String(item?.content || "").trim()))
+    .map((item, index) => ({
+      id: item.message_id || item.id || `${item.role}-${item.created_at || index}`,
       role: normalizeMessageRole(item.role),
       content: item.content || "",
     }));

@@ -101,6 +101,20 @@ function scrapeItemTitle(item: ScrapeItem): string {
   return item.url || "Resultado";
 }
 
+function searchStatusLabel(status: SearchResponse["status"] | undefined): string {
+  if (status === "partial_success") return "Parcial";
+  if (status === "failed") return "Falhou";
+  if (status === "empty") return "Sem resultados";
+  return "Concluida";
+}
+
+function searchStatusClass(status: SearchResponse["status"] | undefined): string {
+  if (status === "partial_success") return "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200";
+  if (status === "failed") return "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200";
+  if (status === "empty") return "border-slate-300 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-900/20 dark:text-slate-200";
+  return "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200";
+}
+
 export default function SearchPage() {
   const { t } = useAppSettings();
   const [, setLocation] = useLocation();
@@ -190,6 +204,10 @@ export default function SearchPage() {
   }, [lastScrape?.results]);
 
   const searchErrors = [...(lastScrape?.errors ?? []), ...(lastResult?.errors ?? [])];
+  const effectiveStatus = (lastResult?.status || lastScrape?.status) as SearchResponse["status"] | undefined;
+  const effectiveStatusSummary = lastResult?.status_summary || lastScrape?.status_summary;
+  const effectiveTotal = lastResult?.total ?? lastScrape?.total ?? 0;
+  const hasRunData = Boolean(lastResult || lastScrape);
 
   const sources = sourceOptions;
 
@@ -256,7 +274,11 @@ export default function SearchPage() {
         );
       }
 
-      if (total === 0) {
+      if (result.status === "partial_success") {
+        toast.warning(result.status_summary?.message || "Busca concluida com falhas parciais em algumas fontes.");
+      } else if (result.status === "failed") {
+        toast.error(result.status_summary?.message || "Busca concluida sem resultados devido a falhas nas fontes selecionadas.");
+      } else if (total === 0) {
         toast.warning(t("search.emptyResult"));
       }
     } catch (err) {
@@ -484,14 +506,18 @@ export default function SearchPage() {
             </button>
           </article>
 
-          {lastResult && (
+          {hasRunData && (
             <article className="app-panel p-6">
               <h3 className="text-lg font-semibold">{t("search.lastRun")}</h3>
               <p className="mt-3 text-sm">
-                {t("search.found")}: <strong>{lastResult.total ?? 0}</strong>
+                {t("search.found")}: <strong>{effectiveTotal}</strong>
               </p>
+              <div className={`mt-3 rounded-xl border px-3 py-2 text-xs font-medium ${searchStatusClass(effectiveStatus)}`}>
+                Status: {searchStatusLabel(effectiveStatus)}
+                {effectiveStatusSummary?.message ? <span className="ml-1">- {effectiveStatusSummary.message}</span> : null}
+              </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Search ID: {lastResult.search_id || "-"}
+                Search ID: {lastResult?.search_id || "-"}
               </p>
               {searchErrors.length > 0 ? (
                 <div className="mt-3 space-y-2">

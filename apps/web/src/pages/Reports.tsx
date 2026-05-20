@@ -60,10 +60,7 @@ export default function ReportsPage() {
 
     try {
       const dateTag = new Date().toISOString().slice(0, 10);
-      const filename =
-        format === "csv" && searchId
-          ? `relatorio-${searchId}-${dateTag}.csv`
-          : undefined;
+      const filename = searchId ? `relatorio-${searchId}-${dateTag}.${format}` : undefined;
       await downloadReport(format, { filename, search_id: searchId || undefined });
     } catch (err) {
       setLastFailedExport(action);
