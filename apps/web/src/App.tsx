@@ -1,24 +1,31 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
+import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppSettingsProvider, useAppSettings } from "./contexts/AppSettingsContext";
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./pages/Dashboard";
-import SearchPage from "./pages/Search";
-import AnalysisPage from "./pages/Analysis";
-import ReportsPage from "./pages/Reports";
-import SettingsPage from "./pages/Settings";
-import MFAVerify from "./pages/MFAVerify";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import NpsModal from "./components/NpsModal";
+import { CookieBanner } from "./components/CookieBanner";
 import { AlertTriangle, RotateCcw } from "lucide-react";
+
+const Home = lazy(() => import("./pages/Home"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const SearchPage = lazy(() => import("./pages/Search"));
+const AnalysisPage = lazy(() => import("./pages/Analysis"));
+const ReportsPage = lazy(() => import("./pages/Reports"));
+const SettingsPage = lazy(() => import("./pages/Settings"));
+const MFAVerify = lazy(() => import("./pages/MFAVerify"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+
+function renderAppErrorFallback(error: Error | null) {
+  return <AppErrorFallback error={error} />;
+}
 
 function Router() {
   return (
@@ -44,11 +51,14 @@ function App() {
   return (
     <ThemeProvider defaultTheme="light" switchable>
       <AppSettingsProvider>
-        <ErrorBoundary fallback={(error) => <AppErrorFallback error={error} />}>
+        <ErrorBoundary fallback={renderAppErrorFallback}>
           <TooltipProvider>
             <Toaster />
-            <Router />
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <Router />
+            </Suspense>
             <NpsModal />
+            <CookieBanner />
           </TooltipProvider>
         </ErrorBoundary>
       </AppSettingsProvider>
@@ -56,7 +66,15 @@ function App() {
   );
 }
 
-function AppErrorFallback({ error }: { error: Error | null }) {
+function RouteLoadingFallback() {
+  return (
+    <div className="app-bg flex h-screen items-center justify-center">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-border border-t-[color:var(--brand)]" />
+    </div>
+  );
+}
+
+function AppErrorFallback({ error }: Readonly<{ error: Error | null }>) {
   const { t } = useAppSettings();
 
   return (
@@ -69,7 +87,7 @@ function AppErrorFallback({ error }: { error: Error | null }) {
             <pre className="whitespace-break-spaces text-sm text-muted-foreground">{error.stack}</pre>
           </div>
         ) : null}
-        <button onClick={() => window.location.reload()} className="primary-btn">
+        <button onClick={() => globalThis.location.reload()} className="primary-btn">
           <RotateCcw size={16} />
           {t("errorBoundary.reload")}
         </button>

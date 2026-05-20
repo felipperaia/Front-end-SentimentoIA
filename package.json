@@ -14,6 +14,7 @@
     "start": "npm run start:legacy",
     "start:legacy": "cross-env NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
+    "type-check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "npm run db:push:legacy",

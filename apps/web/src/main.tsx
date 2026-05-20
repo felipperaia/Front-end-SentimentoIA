@@ -11,13 +11,13 @@ const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
+  if (globalThis.window === undefined) return;
 
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
 
   if (!isUnauthorized) return;
 
-  window.location.href = "/login";
+  globalThis.window.location.href = "/login";
 };
 
 queryClient.getQueryCache().subscribe(event => {
@@ -35,6 +35,19 @@ queryClient.getMutationCache().subscribe(event => {
     console.error("[API Mutation Error]", error);
   }
 });
+
+if (
+  import.meta.env.PROD &&
+  String(import.meta.env.VITE_ENABLE_PWA ?? "true") !== "false" &&
+  globalThis.window !== undefined &&
+  "serviceWorker" in navigator
+) {
+  globalThis.window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js").catch((error) => {
+      console.error("[PWA] Service worker registration failed", error);
+    });
+  });
+}
 
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>

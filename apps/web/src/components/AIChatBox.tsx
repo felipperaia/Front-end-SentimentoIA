@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { Streamdown } from "streamdown";
 
 /**
- * Message type matching server-side LLM Message interface
+ * Message type matching backend chat message interface.
  */
 export type Message = {
   role: "system" | "user" | "assistant";
@@ -17,18 +17,18 @@ export type Message = {
 export type AIChatBoxProps = {
   /**
    * Messages array to display in the chat.
-   * Should match the format used by invokeLLM on the server.
+    * Should match the payload returned by the main backend chat endpoints.
    */
   messages: Message[];
 
   /**
    * Callback when user sends a message.
-   * Typically you'll call a tRPC mutation here to invoke the LLM.
+    * Typically calls the main backend API (for example, sentimentApi.sendChatMessage).
    */
   onSendMessage: (content: string) => void;
 
   /**
-   * Whether the AI is currently generating a response
+    * Whether the backend is currently generating a response
    */
   isLoading?: boolean;
 
@@ -60,10 +60,10 @@ export type AIChatBoxProps = {
 };
 
 /**
- * A ready-to-use AI chat box component that integrates with the LLM system.
+ * A ready-to-use chat box component that integrates with the main backend.
  *
  * Features:
- * - Matches server-side Message interface for seamless integration
+ * - Matches backend Message interface for seamless integration
  * - Markdown rendering with Streamdown
  * - Auto-scrolls to latest message
  * - Loading states
@@ -76,31 +76,16 @@ export type AIChatBoxProps = {
  *     { role: "system", content: "You are a helpful assistant." }
  *   ]);
  *
- *   const chatMutation = trpc.ai.chat.useMutation({
- *     onSuccess: (response) => {
- *       // Assuming your tRPC endpoint returns the AI response as a string
- *       setMessages(prev => [...prev, {
- *         role: "assistant",
- *         content: response
- *       }]);
- *     },
- *     onError: (error) => {
- *       console.error("Chat error:", error);
- *       // Optionally show error message to user
- *     }
- *   });
- *
  *   const handleSend = (content: string) => {
- *     const newMessages = [...messages, { role: "user", content }];
- *     setMessages(newMessages);
- *     chatMutation.mutate({ messages: newMessages });
+ *     // Call your main backend endpoint and append new messages on success.
+ *     onSendMessage(content);
  *   };
  *
  *   return (
  *     <AIChatBox
  *       messages={messages}
  *       onSendMessage={handleSend}
- *       isLoading={chatMutation.isPending}
+ *       isLoading={isLoading}
  *       suggestedPrompts={[
  *         "Explain quantum computing",
  *         "Write a hello world in Python"

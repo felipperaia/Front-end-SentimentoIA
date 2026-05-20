@@ -66,7 +66,7 @@ export function AppShell({ title, subtitle, actions, children }: ShellProps) {
         </div>
       </header>
 
-      <main className="container py-8">
+      <main className="container py-3 sm:py-4 lg:py-6">
         <section className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="page-title">{title}</h1>

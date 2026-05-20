@@ -1,240 +1,190 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sentimentApi, getToken } from "@/lib/api";
-import { X, Star, MessageSquare } from "lucide-react";
+import { MessageSquare, Star, X } from "lucide-react";
 
-const NPS_SESSION_KEY = "sentimentoia_nps_session";
-const NPS_INTERACTIONS_KEY = "sentimentoia_nps_interactions";
+const SEARCH_COMPLETED_EVENT = "sentimentoia:search-completed";
+const NPS_HANDLED_KEY = "sentimentoia_nps_handled";
 
-function getSessionId(): string {
-  let id = sessionStorage.getItem(NPS_SESSION_KEY);
-  if (!id) {
-    id = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    sessionStorage.setItem(NPS_SESSION_KEY, id);
+function createSessionId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
   }
-  return id;
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function getInteractionCount(): number {
-  return Number(sessionStorage.getItem(NPS_INTERACTIONS_KEY) || "0");
+function hasHandledNpsInSession() {
+  return sessionStorage.getItem(NPS_HANDLED_KEY) === "1";
 }
 
-function incrementInteractions(): number {
-  const count = getInteractionCount() + 1;
-  sessionStorage.setItem(NPS_INTERACTIONS_KEY, String(count));
-  return count;
+function markNpsAsHandled() {
+  sessionStorage.setItem(NPS_HANDLED_KEY, "1");
 }
-
-const MODULE_MAP: Record<string, string> = {
-  "/dashboard": "dashboard",
-  "/search": "busca",
-  "/analysis": "insights",
-  "/reports": "relatorios",
-  "/settings": "configuracoes",
-};
 
 export default function NpsModal() {
   const [visible, setVisible] = useState(false);
   const [score, setScore] = useState<number | null>(null);
   const [comment, setComment] = useState("");
-  const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const delayedOpenRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const currentRoute = typeof window !== "undefined" ? window.location.pathname : "/";
-  const moduleKey = MODULE_MAP[currentRoute] || "geral";
-
-  const checkNps = useCallback(async () => {
+  const checkAndOpenNps = useCallback(async () => {
     if (!getToken()) return;
-    const count = incrementInteractions();
-    if (count < 5) return; // min interactions
+    if (hasHandledNpsInSession()) return;
+
+    const nextSessionId = createSessionId();
+    setSessionId(nextSessionId);
 
     try {
-      const { should_show } = await sentimentApi.npsCheck(getSessionId());
-      if (should_show) {
+      const { should_show } = await sentimentApi.npsCheck(nextSessionId);
+      if (!should_show) return;
+
+      delayedOpenRef.current = globalThis.setTimeout(() => {
         setVisible(true);
-      }
+      }, 3000);
     } catch {
-      // silently ignore
+      // Silencioso por requisito.
     }
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(checkNps, 8000); // check after 8s of page usage
-    return () => clearTimeout(timer);
-  }, [checkNps]);
+    const onSearchCompleted: EventListener = (event: Event) => {
+      const detail = (event as CustomEvent<{ mentionsCount?: number }>).detail;
+      if ((detail?.mentionsCount ?? 0) <= 0) return;
+      void checkAndOpenNps();
+    };
+
+    globalThis.addEventListener(SEARCH_COMPLETED_EVENT, onSearchCompleted);
+    return () => {
+      globalThis.removeEventListener(SEARCH_COMPLETED_EVENT, onSearchCompleted);
+      if (delayedOpenRef.current !== null) {
+        globalThis.clearTimeout(delayedOpenRef.current);
+      }
+    };
+  }, [checkAndOpenNps]);
 
   async function handleSubmit() {
-    if (score === null || sending) return;
+    if (score === null || sending || !sessionId) return;
+
     setSending(true);
     try {
       await sentimentApi.npsSubmit({
-        session_id: getSessionId(),
-        module_key: moduleKey,
+        session_id: sessionId,
         score,
         comment: comment.trim() || undefined,
-        route: currentRoute,
       });
-      setSubmitted(true);
-      setTimeout(() => setVisible(false), 2000);
     } catch {
-      // still close on error
-      setVisible(false);
+      // Silencioso por requisito.
     } finally {
+      markNpsAsHandled();
+      setVisible(false);
       setSending(false);
     }
   }
 
   async function handleDismiss() {
-    setVisible(false);
-    try {
-      await sentimentApi.npsDismiss({
-        session_id: getSessionId(),
-        module_key: moduleKey,
-        route: currentRoute,
-      });
-    } catch {
-      // silently ignore
+    if (sessionId) {
+      try {
+        await sentimentApi.npsDismiss({
+          session_id: sessionId,
+        });
+      } catch {
+        // Silencioso por requisito.
+      }
     }
+
+    markNpsAsHandled();
+    setVisible(false);
   }
 
   if (!visible) return null;
 
   return (
-    <div
-      id="nps-modal-overlay"
-      style={{
-        position: "fixed",
-        bottom: "24px",
-        right: "24px",
-        zIndex: 9999,
-        maxWidth: "380px",
-        width: "100%",
-      }}
-    >
-      <div
-        className="app-panel"
-        style={{
-          padding: "20px",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-          borderRadius: "16px",
-          position: "relative",
-        }}
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+      <dialog
+        open
+        aria-labelledby="nps-title"
+        className="app-panel relative w-full max-w-md p-5 shadow-2xl"
       >
         <button
-          onClick={handleDismiss}
-          style={{
-            position: "absolute",
-            top: "12px",
-            right: "12px",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "4px",
-            color: "var(--muted-foreground)",
-          }}
-          aria-label="Fechar"
+          type="button"
+          onClick={() => void handleDismiss()}
+          aria-label="Fechar pesquisa NPS"
+          className="icon-btn absolute right-3 top-3"
         >
           <X size={18} />
         </button>
 
-        {submitted ? (
-          <div style={{ textAlign: "center", padding: "12px 0" }}>
-            <Star size={32} style={{ color: "var(--brand)", marginBottom: "8px" }} />
-            <p style={{ fontWeight: 600, fontSize: "16px" }}>Obrigado pelo feedback!</p>
-            <p style={{ color: "var(--muted-foreground)", fontSize: "13px", marginTop: "4px" }}>
-              Sua opinião nos ajuda a melhorar.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div style={{ marginBottom: "12px" }}>
-              <h3 style={{ fontSize: "15px", fontWeight: 600, marginBottom: "4px" }}>
-                Como você avalia o SentimentoIA?
-              </h3>
-              <p style={{ fontSize: "12px", color: "var(--muted-foreground)" }}>
-                De 0 a 10, qual a chance de recomendar?
-              </p>
-            </div>
+        <div className="mb-4 pr-10">
+          <h3 id="nps-title" className="text-base font-semibold sm:text-lg">
+            Como você avalia o SentimentoIA?
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            De 0 a 10, qual a chance de recomendar?
+          </p>
+        </div>
 
-            <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>
-              {Array.from({ length: 11 }, (_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setScore(i)}
-                  style={{
-                    width: "30px",
-                    height: "30px",
-                    borderRadius: "8px",
-                    border: score === i ? "2px solid var(--brand)" : "1px solid var(--border)",
-                    background: score === i ? "var(--brand)" : "transparent",
-                    color: score === i ? "#fff" : "var(--foreground)",
-                    fontWeight: score === i ? 700 : 400,
-                    fontSize: "13px",
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {i}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--muted-foreground)", marginBottom: "12px" }}>
-              <span>Nada provável</span>
-              <span>Muito provável</span>
-            </div>
-
-            <div style={{ marginBottom: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                <MessageSquare size={14} style={{ color: "var(--muted-foreground)" }} />
-                <label style={{ fontSize: "12px", color: "var(--muted-foreground)" }}>
-                  Comentário (opcional)
-                </label>
-              </div>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="O que podemos melhorar?"
-                rows={2}
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border)",
-                  background: "var(--background)",
-                  color: "var(--foreground)",
-                  fontSize: "13px",
-                  resize: "none",
-                }}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {Array.from({ length: 11 }, (_, value) => {
+            const selected = score === value;
+            return (
               <button
-                onClick={handleDismiss}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border)",
-                  background: "transparent",
-                  color: "var(--muted-foreground)",
-                  fontSize: "13px",
-                  cursor: "pointer",
-                }}
+                key={value}
+                type="button"
+                onClick={() => setScore(value)}
+                aria-label={`Selecionar nota ${value}`}
+                className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border text-sm font-medium transition ${
+                  selected
+                    ? "border-[color:var(--brand)] bg-[color:var(--brand)] text-white"
+                    : "border-border bg-background text-foreground hover:bg-accent"
+                }`}
               >
-                Depois
+                {value}
               </button>
-              <button
-                onClick={handleSubmit}
-                disabled={score === null || sending}
-                className="primary-btn"
-                style={{ padding: "6px 16px", fontSize: "13px" }}
-              >
-                {sending ? "Enviando..." : "Enviar"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+            );
+          })}
+        </div>
+
+        <div className="mb-4 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Nada provável</span>
+          <span>Muito provável</span>
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor="nps-comment" className="mb-2 inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <MessageSquare size={14} /> Comentário (opcional)
+          </label>
+          <textarea
+            id="nps-comment"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="O que podemos melhorar?"
+            rows={3}
+            className="field-input mt-0 resize-none"
+          />
+        </div>
+
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => void handleDismiss()}
+            className="secondary-btn min-h-[44px]"
+            aria-label="Responder depois"
+          >
+            Depois
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={score === null || sending}
+            className="primary-btn min-h-[44px]"
+            aria-label="Enviar resposta NPS"
+          >
+            <Star size={14} />
+            {sending ? "Enviando..." : "Enviar"}
+          </button>
+        </div>
+      </dialog>
     </div>
   );
 }

@@ -1,10 +1,30 @@
 import { AppShell } from "@/components/AppShell";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { sentimentApi, type ScrapeResponse, type ScrapeSource } from "@/lib/api";
+import { sentimentApi, type Mention, type ScrapeSource, type SearchResponse } from "@/lib/api";
 import { AlertTriangle, Loader2, Search, WandSparkles } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+
+const SEARCH_COMPLETED_EVENT = "sentimentoia:search-completed";
+
+function normalizeSource(source: string): ScrapeSource | null {
+  const normalized = String(source || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+  if (normalized.includes("reclameaqui")) return "reclameaqui";
+  if (normalized.includes("reddit")) return "reddit";
+  if (normalized.includes("web")) return "web";
+  return null;
+}
+
+function mentionTitle(mention: Mention): string {
+  if (mention.author) return mention.author;
+  if (mention.url) return mention.url;
+  return mention.source || "Menção";
+}
 
 export default function SearchPage() {
   const { t } = useAppSettings();
@@ -13,7 +33,25 @@ export default function SearchPage() {
   const [selectedSources, setSelectedSources] = useState<ScrapeSource[]>(["reclameaqui", "reddit", "web"]);
   const [limitPerSource, setLimitPerSource] = useState(5);
   const [loading, setLoading] = useState(false);
-  const [lastResult, setLastResult] = useState<ScrapeResponse | null>(null);
+  const [lastResult, setLastResult] = useState<SearchResponse | null>(null);
+
+  const groupedMentions = useMemo(() => {
+    const groups: Record<ScrapeSource, Mention[]> = {
+      reclameaqui: [],
+      reddit: [],
+      web: [],
+    };
+
+    for (const mention of lastResult?.mentions ?? []) {
+      const source = normalizeSource(mention.source);
+      if (!source) continue;
+      groups[source].push(mention);
+    }
+
+    return groups;
+  }, [lastResult?.mentions]);
+
+  const searchErrors = lastResult?.errors ?? [];
 
   const sources: Array<{ id: ScrapeSource; name: string; icon: string }> = [
     { id: "reclameaqui", name: "Reclame Aqui", icon: "RA" },
@@ -40,14 +78,23 @@ export default function SearchPage() {
     setLoading(true);
 
     try {
-      const result = await sentimentApi.scrape({
-        query,
+      const result = await sentimentApi.search({
+        brand_name: query,
         sources: selectedSources,
-        limit_per_source: limitPerSource,
       });
 
       setLastResult(result);
-      if (result.total === 0) {
+      const mentionsCount = result.mentions?.length ?? 0;
+
+      if (mentionsCount > 0 && globalThis.window !== undefined) {
+        globalThis.window.dispatchEvent(
+          new CustomEvent(SEARCH_COMPLETED_EVENT, {
+            detail: { mentionsCount },
+          })
+        );
+      }
+
+      if ((result.total ?? mentionsCount) === 0) {
         toast.warning(t("search.emptyResult"));
       }
     } catch (err) {
@@ -146,7 +193,8 @@ export default function SearchPage() {
               <h3 className="text-lg font-semibold">{t("search.resultsBySource")}</h3>
               <div className="mt-4 space-y-4">
                 {sources.map((source) => {
-                  const items = lastResult.results[source.id] || [];
+                  const items = groupedMentions[source.id] || [];
+                  const visibleItems = items.slice(0, limitPerSource);
                   return (
                     <section key={source.id} className="rounded-xl border border-border/80 p-4">
                       <header className="mb-3 flex items-center justify-between gap-3">
@@ -155,22 +203,26 @@ export default function SearchPage() {
                           {items.length}
                         </span>
                       </header>
-                      {items.length === 0 ? (
+                      {visibleItems.length === 0 ? (
                         <p className="text-sm text-muted-foreground">{t("search.noSourceResults")}</p>
                       ) : (
                         <ul className="space-y-3">
-                          {items.map((item, index) => (
+                          {visibleItems.map((item, index) => (
                             <li key={`${source.id}-${index}`} className="rounded-lg border border-border/70 bg-background p-3">
-                              <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-semibold text-[color:var(--brand-strong)] hover:underline"
-                              >
-                                {item.title || item.url}
-                              </a>
-                              {item.snippet ? (
-                                <p className="mt-1 text-sm text-muted-foreground">{item.snippet}</p>
+                              {item.url ? (
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm font-semibold text-[color:var(--brand-strong)] hover:underline"
+                                >
+                                  {mentionTitle(item)}
+                                </a>
+                              ) : (
+                                <p className="text-sm font-semibold text-[color:var(--brand-strong)]">{mentionTitle(item)}</p>
+                              )}
+                              {item.text ? (
+                                <p className="mt-1 text-sm text-muted-foreground">{item.text}</p>
                               ) : null}
                             </li>
                           ))}
@@ -214,17 +266,28 @@ export default function SearchPage() {
               <p className="mt-3 text-sm">
                 {t("search.found")}: <strong>{lastResult.total ?? 0}</strong>
               </p>
-              {lastResult?.errors?.length > 0 ? (
+              {searchErrors.length > 0 ? (
                 <div className="mt-3 space-y-2">
                   <p className="text-xs font-semibold uppercase text-muted-foreground">{t("search.sourceErrors")}</p>
-                  {lastResult.errors.map((err, idx) => (
-                    <div key={idx} className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
+                  {searchErrors.map((err) => {
+                    const errorKey =
+                      typeof err === "string"
+                        ? err
+                        : `${err.source || "fonte"}-${err.error || "erro desconhecido"}`;
+
+                    return (
+                    <div key={errorKey} className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
                       <div className="flex items-start gap-2">
                         <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                        <span>{`${err.source}: ${err.error}`}</span>
+                        <span>
+                          {typeof err === "string"
+                            ? err
+                            : `${err.source || "fonte"}: ${err.error || "erro desconhecido"}`}
+                        </span>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : null}
             </article>

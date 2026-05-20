@@ -68,10 +68,20 @@ export function DataManagementModal({ isOpen, onClose, onDataDeleted }: ModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="app-panel w-full max-w-lg overflow-hidden shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="data-management-title"
+        className="app-panel w-full max-w-lg overflow-hidden shadow-2xl"
+      >
         <div className="flex items-center justify-between border-b border-border/50 px-6 py-4">
-          <h2 className="text-lg font-semibold">Gerenciar e Apagar Dados</h2>
-          <button onClick={onClose} className="rounded-full p-2 hover:bg-muted text-muted-foreground transition-colors">
+          <h2 id="data-management-title" className="text-lg font-semibold">Gerenciar e Apagar Dados</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 hover:bg-muted text-muted-foreground transition-colors"
+            aria-label="Fechar modal de gerenciamento de dados"
+          >
             <X size={20} />
           </button>
         </div>
@@ -95,9 +105,11 @@ export function DataManagementModal({ isOpen, onClose, onDataDeleted }: ModalPro
                 <p className="text-xs text-muted-foreground mt-1">Apaga todos os relatórios e menções salvas.</p>
               </div>
               <button 
+                type="button"
                 onClick={() => handleDeleteByType("searches")} 
                 disabled={isDeleting}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50 min-h-[44px]"
+                aria-label="Apagar todas as pesquisas e menções"
               >
                 Apagar
               </button>
@@ -109,9 +121,11 @@ export function DataManagementModal({ isOpen, onClose, onDataDeleted }: ModalPro
                 <p className="text-xs text-muted-foreground mt-1">Apaga todos os insights gerados pela IA.</p>
               </div>
               <button 
+                type="button"
                 onClick={() => handleDeleteByType("insights")} 
                 disabled={isDeleting}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50 min-h-[44px]"
+                aria-label="Apagar todos os insights"
               >
                 Apagar
               </button>
@@ -123,9 +137,11 @@ export function DataManagementModal({ isOpen, onClose, onDataDeleted }: ModalPro
                 <p className="text-xs text-muted-foreground mt-1">Apaga todas as conversas do assistente.</p>
               </div>
               <button 
+                type="button"
                 onClick={() => handleDeleteByType("conversations")} 
                 disabled={isDeleting}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50 min-h-[44px]"
+                aria-label="Apagar todas as conversas"
               >
                 Apagar
               </button>
@@ -141,9 +157,11 @@ export function DataManagementModal({ isOpen, onClose, onDataDeleted }: ModalPro
                   Esta ação apagará <strong>todos</strong> os dados vinculados à sua conta (buscas, conversas, cache de scraper, etc). Não há volta.
                 </p>
                 <button 
+                  type="button"
                   onClick={handleDeleteAll}
                   disabled={isDeleting}
-                  className="mt-4 flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+                  className="mt-4 flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50 min-h-[44px]"
+                  aria-label="Apagar todos os dados da conta"
                 >
                   <Trash2 size={16} />
                   Apagar Tudo

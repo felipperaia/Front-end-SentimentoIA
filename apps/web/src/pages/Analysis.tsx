@@ -22,6 +22,7 @@ export default function AnalysisPage() {
   const [processing, setProcessing] = useState(false);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [resolutionFilter, setResolutionFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
   const [error, setError] = useState("");
@@ -30,12 +31,14 @@ export default function AnalysisPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await sentimentApi.insights({
+      const existingParams = {
         include_archived: include,
         limit: 100,
         priority: priorityFilter === "all" ? undefined : priorityFilter,
         resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
-      });
+      };
+      const params = sourceFilter !== "all" ? { ...existingParams, source: sourceFilter } : existingParams;
+      const response = await sentimentApi.insights(params);
       setItems(response.items ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("analysis.loadError"));
@@ -46,7 +49,7 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     void loadInsights();
-  }, [includeArchived, priorityFilter, resolutionFilter]);
+  }, [includeArchived, sourceFilter, priorityFilter, resolutionFilter]);
 
   async function handleGenerate() {
     setProcessing(true);
@@ -231,6 +234,23 @@ export default function AnalysisPage() {
             className="h-4 w-4"
           />
           <span>{t("analysis.showArchived")}</span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="text-muted-foreground">Fonte:</span>
+          <select
+            className="field-input h-9 py-1"
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+          >
+            <option value="all">Todas as fontes</option>
+            <option value="reddit">reddit</option>
+            <option value="youtube">youtube</option>
+            <option value="appstore">appstore</option>
+            <option value="googleplay">googleplay</option>
+            <option value="glassdoor">glassdoor</option>
+            <option value="trustpilot">trustpilot</option>
+          </select>
         </label>
 
         <label className="flex items-center gap-2">

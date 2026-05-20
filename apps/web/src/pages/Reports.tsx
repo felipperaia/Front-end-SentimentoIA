@@ -9,17 +9,22 @@ type ExportAction = "csv" | "pdf" | "insights-markdown" | "insights-pdf";
 
 export default function ReportsPage() {
   const { t } = useAppSettings();
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [resolutionFilter, setResolutionFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
   const [limit, setLimit] = useState(100);
   const [activeExport, setActiveExport] = useState<ExportAction | null>(null);
   const [lastFailedExport, setLastFailedExport] = useState<ExportAction | null>(null);
 
-  const insightExportParams = {
+  const existingInsightExportParams = {
     priority: priorityFilter === "all" ? undefined : priorityFilter,
     resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
     limit,
   };
+  const insightExportParams =
+    sourceFilter !== "all"
+      ? { ...existingInsightExportParams, source: sourceFilter }
+      : existingInsightExportParams;
 
   async function handleDownload(format: "csv" | "pdf") {
     const action = format;
@@ -27,7 +32,13 @@ export default function ReportsPage() {
     setLastFailedExport(null);
 
     try {
-      await downloadReport(format);
+      const source = sourceFilter !== "all" ? sourceFilter : undefined;
+      const dateTag = new Date().toISOString().slice(0, 10);
+      const filename =
+        format === "csv" && source
+          ? `relatorio-${source}-${dateTag}.csv`
+          : undefined;
+      await downloadReport(format, { source, filename });
     } catch (err) {
       setLastFailedExport(action);
       toast.error(err instanceof Error ? err.message : t("reports.error"));
@@ -85,6 +96,23 @@ export default function ReportsPage() {
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <label className="flex items-center gap-2">
+              <span className="text-muted-foreground">Fonte:</span>
+              <select
+                className="field-input h-9 py-1"
+                value={sourceFilter}
+                onChange={(event) => setSourceFilter(event.target.value)}
+              >
+                <option value="all">Todas as fontes</option>
+                <option value="reddit">reddit</option>
+                <option value="youtube">youtube</option>
+                <option value="appstore">appstore</option>
+                <option value="googleplay">googleplay</option>
+                <option value="glassdoor">glassdoor</option>
+                <option value="trustpilot">trustpilot</option>
+              </select>
+            </label>
+
             <label className="flex items-center gap-2">
               <span className="text-muted-foreground">Prioridade:</span>
               <select

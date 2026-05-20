@@ -475,7 +475,7 @@ export default function SettingsPage() {
                       ) : (
                         <div className="grid gap-4 md:grid-cols-[200px_minmax(0,1fr)]">
                           <div className="rounded-lg border border-border/70 bg-background p-3">
-                            <img src={mfaSetup.qr_code} alt={t("settings.mfaQrAlt")} className="mx-auto h-44 w-44" />
+                            <img src={mfaSetup.qr_code} alt={t("settings.mfaQrAlt")} loading="lazy" className="mx-auto h-44 w-44" />
                           </div>
                           <div className="space-y-3">
                             <p className="text-sm text-muted-foreground">{t("settings.mfaSetupHelp")}</p>

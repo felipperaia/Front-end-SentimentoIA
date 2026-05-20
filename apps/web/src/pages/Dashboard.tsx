@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   BarChart3,
   Brain,
+  ChartNoAxesCombined,
   FileText,
   RefreshCw,
   SearchIcon,
@@ -23,19 +24,177 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DashboardResponse, sentimentApi } from "@/lib/api";
+import { DashboardMetrics, DashboardResponse, Mention, NpsMetrics, sentimentApi } from "@/lib/api";
 import { DataManagementModal } from "@/components/DataManagementModal";
+import { SourceTierBadge } from "@/components/SourceTierBadge";
+import { getSourceColor, getSourceLabel } from "@/lib/sourceColors";
 
 const COLORS = ["#0f766e", "#ea580c", "#0ea5e9", "#16a34a", "#db2777", "#7c3aed"];
 
+type SourceChartItem = {
+  source: string;
+  label: string;
+  value: number;
+  percentage: number;
+  color: string;
+};
+
+type StatusBannerState = {
+  level: "critical" | "high" | "medium" | "low" | "ok";
+  label: string;
+  emoji: string;
+  className: string;
+};
+
+const STATUS_BANNER_STATES: Record<StatusBannerState["level"], Omit<StatusBannerState, "level">> = {
+  critical: {
+    label: "Situação Crítica",
+    emoji: "🚨",
+    className: "bg-red-600 text-white",
+  },
+  high: {
+    label: "Atenção Necessária",
+    emoji: "⚠️",
+    className: "bg-orange-500 text-white",
+  },
+  medium: {
+    label: "Monitoramento",
+    emoji: "🟡",
+    className: "bg-yellow-500 text-black",
+  },
+  low: {
+    label: "Situação Estável",
+    emoji: "🔵",
+    className: "bg-blue-500 text-white",
+  },
+  ok: {
+    label: "Excelente Reputação",
+    emoji: "✅",
+    className: "bg-green-500 text-white",
+  },
+};
+
 function mapRecord(record?: Record<string, number>) {
   return Object.entries(record ?? {}).map(([name, value]) => ({ name, value }));
+}
+
+function resolveTopThemes(rawThemes: DashboardMetrics["top_themes"] | undefined): string[] {
+  if (!rawThemes) return [];
+
+  if (Array.isArray(rawThemes)) {
+    return rawThemes.filter(Boolean).slice(0, 3);
+  }
+
+  return Object.entries(rawThemes)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([theme]) => theme);
+}
+
+function normalizeSource(source: string): string {
+  return String(source || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function groupMentionsBySource(mentions: Mention[]): SourceChartItem[] {
+  const grouped = mentions.reduce<Record<string, number>>((acc, mention) => {
+    const key = normalizeSource(mention.source) || "web";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const total = Math.max(1, mentions.length);
+  return Object.entries(grouped)
+    .map(([source, value]) => ({
+      source,
+      label: getSourceLabel(source),
+      value,
+      percentage: (value / total) * 100,
+      color: getSourceColor(source),
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function resolveNegativeCount(metrics: Partial<DashboardMetrics>, mentions: Mention[]): number {
+  if (typeof metrics.negative_count === "number") {
+    return metrics.negative_count;
+  }
+
+  const distribution = metrics.sentiment_distribution ?? {};
+  const fromDistribution =
+    Number(distribution.negative ?? 0) +
+    Number(distribution.negativo ?? 0) +
+    Number(distribution.negatives ?? 0);
+
+  if (fromDistribution > 0) {
+    return fromDistribution;
+  }
+
+  return mentions.filter((mention) => {
+    const sentiment = String(mention.sentiment || "").toLowerCase();
+    return sentiment.includes("neg");
+  }).length;
+}
+
+function resolveStatusBanner(score: number, negativeRatio: number): StatusBannerState {
+  if (score < 30 && negativeRatio > 0.6) {
+    return { level: "critical", ...STATUS_BANNER_STATES.critical };
+  }
+  if (score < 45 && negativeRatio > 0.45) {
+    return { level: "high", ...STATUS_BANNER_STATES.high };
+  }
+  if (score < 60 && negativeRatio > 0.3) {
+    return { level: "medium", ...STATUS_BANNER_STATES.medium };
+  }
+  if (score < 75) {
+    return { level: "low", ...STATUS_BANNER_STATES.low };
+  }
+  return { level: "ok", ...STATUS_BANNER_STATES.ok };
+}
+
+function resolveTrend(trend?: string) {
+  const normalized = String(trend || "").toLowerCase();
+  if (!normalized) {
+    return { symbol: "→", label: "Sem tendência" };
+  }
+  if (normalized.includes("up") || normalized.includes("alta") || normalized.includes("growth") || normalized.includes("cresc")) {
+    return { symbol: "↑", label: "Em alta" };
+  }
+  if (normalized.includes("down") || normalized.includes("queda") || normalized.includes("drop") || normalized.includes("declin")) {
+    return { symbol: "↓", label: "Em queda" };
+  }
+  return { symbol: "→", label: "Estável" };
+}
+
+function SourceDistributionTooltip({
+  active,
+  payload,
+}: Readonly<{
+  active?: boolean;
+  payload?: ReadonlyArray<{ payload: SourceChartItem }>;
+}>) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const item = payload[0]?.payload;
+  if (!item) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-sm shadow-lg">
+      <p className="font-semibold">{item.label}</p>
+      <p>Quantidade: {item.value}</p>
+      <p>Percentual: {item.percentage.toFixed(1)}%</p>
+    </div>
+  );
 }
 
 export default function Dashboard() {
   const { settings, t } = useAppSettings();
   const [, setLocation] = useLocation();
   const [data, setData] = useState<DashboardResponse | null>(null);
+  const [sourceData, setSourceData] = useState<SourceChartItem[]>([]);
+  const [npsMetrics, setNpsMetrics] = useState<NpsMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
@@ -44,7 +203,21 @@ export default function Dashboard() {
     setLoading(true);
     setError("");
     try {
-      setData(await sentimentApi.dashboard());
+      const dashboardData = await sentimentApi.dashboard();
+      setData(dashboardData);
+
+      const [mentionsData, npsData] = await Promise.all([
+        sentimentApi
+          .mentions({
+            batch_id: dashboardData.batch_id ?? undefined,
+            limit: 1000,
+          })
+          .catch(() => dashboardData.mentions ?? []),
+        sentimentApi.npsMetrics().catch(() => null),
+      ]);
+
+      setSourceData(groupMentionsBySource(mentionsData.length ? mentionsData : dashboardData.mentions ?? []));
+      setNpsMetrics(npsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.error"));
     } finally {
@@ -63,20 +236,41 @@ export default function Dashboard() {
     () => mapRecord(metrics.sentiment_distribution),
     [metrics.sentiment_distribution]
   );
-  const sourceDistribution = metrics.source_distribution ?? (metrics as { sources_distribution?: Record<string, number> }).sources_distribution;
-  const sourceData = useMemo(
-    () => mapRecord(sourceDistribution),
-    [sourceDistribution]
-  );
   const aspectData = useMemo(
     () => mapRecord(metrics.top_aspects).slice(0, 8),
     [metrics.top_aspects]
   );
 
-  const totalMentions = metrics.total_mentions ?? mentions.length;
-  const reputationScore = Math.round(metrics.reputation_score ?? 0);
+  const totalMentions = Math.max(0, metrics.total_mentions ?? mentions.length);
+  const sentimentScore = Math.round(metrics.sentiment_score ?? metrics.reputation_score ?? 0);
+  const reputationScore = Math.round(metrics.reputation_score ?? sentimentScore);
   const criticalMentions = metrics.critical_mentions ?? 0;
-  const averageUrgency = Math.round((metrics.average_urgency ?? 0) * 100);
+  const topThemes = useMemo(
+    () => resolveTopThemes(metrics.top_themes),
+    [metrics.top_themes]
+  );
+  const averageUrgency = useMemo(() => {
+    if (typeof metrics.urgency_score === "number") return metrics.urgency_score;
+
+    const urgencyScores = mentions
+      .map((mention) => mention.urgency_score)
+      .filter((value): value is number => typeof value === "number");
+
+    if (urgencyScores.length > 0) {
+      return urgencyScores.reduce((acc, current) => acc + current, 0) / urgencyScores.length;
+    }
+
+    const fallback = Number(metrics.average_urgency ?? 0);
+    if (!Number.isFinite(fallback)) return 0;
+    return fallback <= 1 ? fallback * 100 : fallback;
+  }, [mentions, metrics.average_urgency, metrics.urgency_score]);
+
+  const totalComments = Math.max(1, metrics.total_comments ?? metrics.total_mentions ?? mentions.length);
+  const negativeCount = resolveNegativeCount(metrics, mentions);
+  const negativeRatio = negativeCount / totalComments;
+  const statusBanner = resolveStatusBanner(sentimentScore, negativeRatio);
+  const trend = resolveTrend(data?.latest_insight?.trend ?? metrics.trend);
+
   const numberFormatter = useMemo(() => new Intl.NumberFormat(settings.locale), [settings.locale]);
 
   if (loading) {
@@ -132,11 +326,24 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className={`sticky top-20 z-30 mb-6 rounded-lg px-4 py-3 text-sm font-semibold shadow-lg ${statusBanner.className}`}>
+            <p className="flex items-center gap-2">
+              <span aria-hidden="true">{statusBanner.emoji}</span>
+              <span>{statusBanner.label}</span>
+            </p>
+            <p className="mt-1 text-xs opacity-90">
+              Score: {sentimentScore}/100 • Menções negativas: {negativeCount} ({(negativeRatio * 100).toFixed(1)}%)
+            </p>
+          </section>
+
+          <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <MetricCard icon={BarChart3} label={t("dashboard.metricMentions")} value={numberFormatter.format(totalMentions)} />
             <MetricCard icon={TrendingUp} label={t("dashboard.metricReputation")} value={`${numberFormatter.format(reputationScore)}/100`} />
             <MetricCard icon={AlertTriangle} label={t("dashboard.metricCritical")} value={numberFormatter.format(criticalMentions)} />
-            <MetricCard icon={Brain} label={t("dashboard.metricUrgency")} value={`${numberFormatter.format(averageUrgency)}%`} />
+            <MetricCard icon={Brain} label={t("dashboard.metricUrgency")} value={`${averageUrgency.toFixed(1)}%`} />
+            <MetricCard icon={Brain} label="NPS" value={typeof npsMetrics?.nps_score === "number" ? npsMetrics.nps_score : "-"} />
+            <MetricCard icon={ChartNoAxesCombined} label="Tendência" value={`${trend.symbol} ${trend.label}`} />
+            <MetricCard icon={FileText} label="Top temas" value={topThemes.length > 0 ? topThemes.join(" • ") : "Sem dados"} />
           </section>
 
           <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
@@ -158,17 +365,40 @@ export default function Dashboard() {
 
             <article className="app-panel p-5 md:p-6">
               <h2 className="panel-title">{t("dashboard.sources")}</h2>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={sourceData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-                    <XAxis dataKey="name" stroke="var(--muted-foreground)" />
-                    <YAxis allowDecimals={false} stroke="var(--muted-foreground)" />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="var(--brand)" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {sourceData.length === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">Sem dados de fontes para exibir.</p>
+              ) : (
+                <>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={sourceData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                        <XAxis dataKey="label" stroke="var(--muted-foreground)" />
+                        <YAxis allowDecimals={false} stroke="var(--muted-foreground)" />
+                        <Tooltip content={<SourceDistributionTooltip />} />
+                        <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                          {sourceData.map((entry) => (
+                            <Cell key={entry.source} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {sourceData.map((entry) => (
+                      <span key={`legend-${entry.source}`} className="badge-chip gap-2">
+                        <span
+                          className="inline-flex h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: entry.color }}
+                          aria-hidden="true"
+                        />
+                        {entry.label}: {numberFormatter.format(entry.value)} ({entry.percentage.toFixed(1)}%)
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
             </article>
           </section>
 
@@ -200,7 +430,15 @@ export default function Dashboard() {
                 {mentions.slice(0, 6).map((mention) => (
                   <div key={mention.id} className="rounded-xl border border-border/70 bg-background/75 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3 text-xs">
-                      <span className="badge-chip">{mention.source}</span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white"
+                          style={{ backgroundColor: getSourceColor(mention.source) }}
+                        >
+                          {getSourceLabel(mention.source)}
+                        </span>
+                        <SourceTierBadge tier={mention?.source_tier} />
+                      </div>
                       <span className="text-muted-foreground">{mention.sentiment}</span>
                     </div>
                     <p className="line-clamp-3 text-sm">{mention.text}</p>
@@ -225,18 +463,18 @@ function MetricCard({
   icon: Icon,
   label,
   value,
-}: {
+}: Readonly<{
   icon: ComponentType<{ size?: number; className?: string }>;
   label: string;
   value: string | number;
-}) {
+}>) {
   return (
     <div className="stat-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <span className="text-sm uppercase text-muted-foreground">{label}</span>
         <Icon size={22} className="text-[color:var(--brand)]" />
       </div>
-      <div className="text-3xl font-semibold text-foreground">{value}</div>
+      <div className="text-lg font-semibold text-foreground sm:text-xl">{value}</div>
     </div>
   );
 }

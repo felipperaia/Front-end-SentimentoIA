@@ -1193,6 +1193,22 @@ export const TRANSLATIONS = {
     "pt-BR": "Erro na requisição",
     "en-US": "Request failed",
   },
+  "api.authExpired": {
+    "pt-BR": "Sua sessão expirou. Faça login novamente.",
+    "en-US": "Your session has expired. Please sign in again.",
+  },
+  "api.timeout": {
+    "pt-BR": "A requisição excedeu o tempo limite. Tente novamente.",
+    "en-US": "The request timed out. Please try again.",
+  },
+  "api.aiUnavailable": {
+    "pt-BR": "A IA está temporariamente indisponível. Tente novamente em instantes.",
+    "en-US": "AI is temporarily unavailable. Please try again shortly.",
+  },
+  "api.aiFallback": {
+    "pt-BR": "Nao foi possivel concluir a resposta de IA no momento. Tente novamente em instantes.",
+    "en-US": "Unable to complete the AI response right now. Please try again shortly.",
+  },
   "api.reportError": {
     "pt-BR": "Erro ao gerar relatório",
     "en-US": "Unable to generate report",

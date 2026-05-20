@@ -1,147 +1,285 @@
-# Sentimento AI Frontend
+# SentimentoIA Frontend
 
-Frontend web React/Vite da plataforma Sentimento AI.
+Aplicação web do SentimentoIA construída com React + Vite, focada em análise de reputação digital, dashboards de sentimento, insights e relatórios.
 
-## Objetivo arquitetural
+Este repositório contém o frontend em modo backend-only: toda inteligência e persistência de dados ficam no backend.
 
-Este frontend opera em modo backend-only:
+## Sumário
 
-- Nunca chama Ollama diretamente.
-- Nunca envia API keys de LLM no browser.
-- Consome somente a API backend via `VITE_API_URL`.
-- Mantem fluxo user-scoped via token JWT (`Authorization: Bearer ...`).
-- Pode ser publicado como site estatico (Netlify ou equivalente).
+- Visão geral
+- Tecnologias
+- Requisitos
+- Como executar localmente
+- Variáveis de ambiente
+- Scripts disponíveis
+- Estrutura do projeto
+- Integração com backend
+- PWA
+- Deploy
+- Segurança
+- Roteiro de apresentação
+- Troubleshooting
 
-## Stack
+## Visão Geral
 
-- React 19 + TypeScript
+O frontend foi projetado para:
+
+- autenticação e sessão de usuário
+- busca de menções por fonte
+- dashboard com distribuição por fonte e métricas de reputação
+- geração e gestão de insights
+- exportação de relatórios
+- NPS contextual e consentimento LGPD
+- experiência PWA (manifest + service worker)
+
+Princípios arquiteturais:
+
+- frontend nunca chama provedor de LLM diretamente
+- frontend nunca carrega API key sensível de IA
+- frontend consome apenas endpoints do backend via VITE_API_URL
+- token JWT é utilizado nas rotas protegidas
+
+## Tecnologias
+
+- React 19
+- TypeScript 5
 - Vite 7
+- Tailwind CSS 4
 - wouter
-- Tailwind CSS
+- React Query
 - Recharts
 
-## Estrutura principal
+## Requisitos
 
-- `apps/web/src/lib/api.ts`: cliente HTTP unico (auth, timeout, retry, downloads).
-- `apps/web/src/components/DomainChatWidget.tsx`: chat com backend (`/api/chat/*`).
-- `apps/web/src/pages/Dashboard.tsx`: metricas e dados por usuario autenticado.
-- `apps/web/src/pages/Analysis.tsx`: insights persistidos, filtros e acoes.
-- `apps/web/src/pages/Reports.tsx`: exportacoes CSV/PDF e insights Markdown/PDF com filtros.
+- Node.js 20+
+- npm 10+ ou pnpm 10+
+- backend da plataforma SentimentoIA disponível
 
-## Contrato frontend -> backend
+## Como Executar Localmente
 
-Todas as chamadas abaixo sao feitas com `VITE_API_URL` + path.
+### 1) Instalar dependências
 
-### Autenticacao e sessao
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-
-### Dashboard, busca e mencoes
-
-- `GET /api/dashboard`
-- `POST /api/search`
-- `POST /api/scrape`
-- `GET /api/mentions`
-
-### Insights
-
-- `GET /api/insights` (filtros: `priority`, `resolution`, `include_archived`, `limit`)
-- `POST /api/insights/generate`
-- `POST /api/insights/{insight_id}/regenerate`
-- `DELETE /api/insights/{insight_id}`
-- `GET /api/insights/export/markdown`
-- `GET /api/insights/export/pdf`
-
-### Chat
-
-- `GET /api/chat/threads`
-- `POST /api/chat/threads`
-- `GET /api/chat/threads/{thread_id}/messages`
-- `POST /api/chat/threads/{thread_id}/messages`
-- `DELETE /api/chat/threads/{thread_id}`
-- `DELETE /api/chat/threads/{thread_id}/messages/{message_id}`
-- `DELETE /api/chat/threads`
-
-## Variaveis de ambiente (apps/web/.env)
-
-Obrigatorias para operacao correta:
-
-- `VITE_API_URL`: URL publica da API backend.
-- `VITE_API_TIMEOUT_MS`: timeout por requisicao HTTP.
-- `VITE_API_RETRY_ATTEMPTS`: tentativas de retry para falhas de rede/5xx/429.
-- `VITE_API_RETRY_DELAY_MS`: delay base entre retries.
-
-O arquivo `apps/web/.env` foi ajustado para manter o valor antigo comentado e usar endpoint publico por padrao.
-
-Exemplo atual:
-
-```env
-# VITE_API_URL=http://localhost:8000
-VITE_API_URL=https://api.seudominio.com
-VITE_API_TIMEOUT_MS=20000
-VITE_API_RETRY_ATTEMPTS=2
-VITE_API_RETRY_DELAY_MS=700
-```
-
-## Execucao local
-
-No diretorio `frontend-web`:
+Com npm:
 
 ```bash
 npm install
+```
+
+Com pnpm:
+
+```bash
+pnpm install
+```
+
+### 2) Configurar ambiente
+
+Copie o arquivo de exemplo para o ambiente local:
+
+Linux/macOS:
+
+```bash
+cp apps/web/.env.example apps/web/.env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item apps/web/.env.example apps/web/.env
+```
+
+### 3) Ajustar URL do backend
+
+No arquivo apps/web/.env, configure:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+### 4) Subir o frontend
+
+Com npm:
+
+```bash
 npm run dev
 ```
 
-Build de producao:
+Com pnpm:
 
 ```bash
-npm run build
+pnpm dev
 ```
 
-## Deploy estatico (Netlify)
+O Vite exibirá a URL local (normalmente http://localhost:5173).
 
-Arquivo incluido: `netlify.toml`.
+### 5) Validar tipos
 
-Configuracao definida:
+```bash
+npm run check
+```
 
-- Build command: `npm run build`
-- Publish directory: `dist/public`
-- SPA redirect: `/* -> /index.html` (200)
+## Variáveis de Ambiente
 
-Passos no painel Netlify:
+Arquivo: apps/web/.env
 
-1. Conectar o repositorio.
-2. Definir root/base para `frontend-web` (se estiver fazendo deploy do monorepo raiz).
-3. Definir variavel `VITE_API_URL` com a URL publica da API backend.
-4. Executar deploy.
+Base recomendada:
 
-## Deploy em outros hosts estaticos
+```env
+VITE_API_URL=http://localhost:8000
+VITE_API_TIMEOUT_MS=20000
+VITE_API_RETRY_ATTEMPTS=2
+VITE_API_RETRY_DELAY_MS=700
+VITE_ENABLE_CHAT=true
+VITE_ENABLE_NPS=true
+VITE_ENABLE_PWA=true
+VITE_PRIVACY_POLICY_URL=/api/privacy/policy
+```
 
-Em Vercel, Cloudflare Pages, S3+CloudFront ou similares:
+Descrição das principais variáveis:
 
-- Publicar a pasta gerada `dist/public`.
-- Garantir rewrite SPA para `index.html`.
-- Definir `VITE_API_URL` para backend publico.
+- VITE_API_URL: URL pública do backend
+- VITE_API_TIMEOUT_MS: timeout por requisição (ms)
+- VITE_API_RETRY_ATTEMPTS: tentativas extras para falhas transitórias
+- VITE_API_RETRY_DELAY_MS: atraso base entre retentativas
+- VITE_ENABLE_CHAT: habilita/desabilita o widget de chat
+- VITE_ENABLE_NPS: habilita/desabilita o modal de NPS
+- VITE_ENABLE_PWA: habilita/desabilita registro do service worker
+- VITE_PRIVACY_POLICY_URL: URL da política de privacidade
 
-## Regras de seguranca e escopo de usuario
+## Scripts Disponíveis
 
-- Sem chave de LLM no frontend.
-- Sem chamadas diretas para Ollama no browser.
-- Sem dependencia de localhost em producao.
-- Token JWT anexado automaticamente em todas as chamadas protegidas.
-- Operacoes de chat, insights, dashboard e exportacao seguem escopo do usuario autenticado no backend.
+| Script | Finalidade |
+| --- | --- |
+| npm run dev | Executa frontend em modo desenvolvimento |
+| npm run build | Gera build de produção |
+| npm run check | Verifica tipos TypeScript sem emitir arquivos |
+| npm run type-check | Alias de check |
+| npm run test | Executa testes (Vitest) |
+| npm run format | Formata código com Prettier |
 
-## UX e resiliencia
+Observação: existem scripts legados no package.json, mas para o fluxo atual de frontend use principalmente dev, build, check e test.
 
-- Estados de loading para consultas e exportacoes.
-- Estados de erro com acao de retry.
-- Estados vazios para dashboards/insights sem dados.
-- Retry automatico no cliente API para erros transientes.
+## Estrutura do Projeto
 
-## Troubleshooting rapido
+```text
+frontend-web/
+├─ apps/
+│  └─ web/
+│     ├─ public/
+│     │  ├─ manifest.json
+│     │  ├─ sw.js
+│     │  ├─ icon-192.png
+│     │  └─ icon-512.png
+│     ├─ src/
+│     │  ├─ components/
+│     │  ├─ contexts/
+│     │  ├─ lib/
+│     │  └─ pages/
+│     ├─ .env.example
+│     └─ index.html
+├─ vite.config.ts
+├─ netlify.toml
+└─ package.json
+```
 
-- Erro `VITE_API_URL nao esta definido`: revisar `apps/web/.env`.
-- CORS/401 em producao: validar URL publica backend e token de sessao.
-- Exportacao falhando: verificar permissao/autenticacao do usuario e disponibilidade da API backend.
+Pontos centrais do código:
+
+- apps/web/src/lib/api.ts: cliente HTTP, autenticação, retry e integração com backend
+- apps/web/src/pages/Dashboard.tsx: métricas, fontes, status e menções
+- apps/web/src/pages/Search.tsx: fluxo de busca e gatilho de NPS pós-busca
+- apps/web/src/components/NpsModal.tsx: coleta de NPS
+- apps/web/src/components/CookieBanner.tsx: consentimento LGPD
+
+## Integração com Backend
+
+O frontend consome endpoints no formato:
+
+```text
+{VITE_API_URL}/api/...
+```
+
+Principais rotas utilizadas:
+
+- autenticação: /api/auth/*
+- dashboard e menções: /api/dashboard, /api/mentions
+- busca: /api/search
+- insights: /api/insights/*
+- chat: /api/chat/*
+- NPS: /api/nps/*
+- privacidade: /api/privacy/*
+
+## PWA
+
+Implementação ativa com:
+
+- manifest em apps/web/public/manifest.json
+- service worker em apps/web/public/sw.js
+- registro do SW em produção no bootstrap do frontend
+
+Comportamento principal do service worker:
+
+- cache de assets estáticos essenciais
+- limpeza de caches antigos no activate
+- bypass explícito para chamadas /api/
+
+## Deploy
+
+### Netlify
+
+Configuração já incluída em netlify.toml:
+
+- command: npm run build
+- publish: dist/public
+- redirect SPA: /* -> /index.html
+
+Passos:
+
+1. Conectar o repositório no Netlify
+2. Definir Node 20 (quando necessário)
+3. Configurar variável VITE_API_URL no ambiente de deploy
+4. Publicar
+
+### Outros provedores estáticos
+
+Para Vercel, Cloudflare Pages, S3+CloudFront e similares:
+
+- publicar a pasta dist/public
+- habilitar fallback SPA para index.html
+- configurar VITE_API_URL apontando para backend público
+
+## Segurança
+
+Regras importantes do frontend:
+
+- sem chave de IA em variáveis públicas do browser
+- sem chamada direta a gateway/provedor de LLM
+- sessão de usuário protegida com token
+- escopo de dados orientado ao usuário autenticado
+
+## Roteiro de Apresentação
+
+Fluxo recomendado para demo:
+
+1. Login na aplicação
+2. Executar busca por marca
+3. Mostrar Dashboard com distribuição por fonte e status
+4. Navegar em Insights e filtros
+5. Exportar relatório
+6. Exibir NPS pós-busca
+7. Exibir banner LGPD e política
+
+## Troubleshooting
+
+- Erro VITE_API_URL não definido:
+	- conferir apps/web/.env
+- CORS, 401 ou timeout:
+	- validar backend disponível e URL correta
+	- validar token/sessão
+- Build falhando:
+	- executar npm install novamente
+	- executar npm run check para localizar erro de tipo
+- PWA não atualiza:
+	- limpar cache do navegador e service worker antigo
+
+## Licença
+
+MIT (conforme package.json).

@@ -130,6 +130,7 @@
     @apply bg-background text-foreground;
     font-family:
       Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow-x: hidden;
     background:
       linear-gradient(180deg, color-mix(in oklch, var(--background) 96%, white) 0%, var(--background) 46%),
       var(--background);
@@ -203,6 +204,7 @@
   }
 
   .app-bg {
+    overflow-x: hidden;
     background:
       linear-gradient(180deg, color-mix(in oklch, var(--background) 96%, white) 0%, var(--background) 54%),
       var(--background);
@@ -326,7 +328,7 @@
   }
 
   .shell-nav-btn {
-    @apply inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm transition;
+    @apply inline-flex min-h-[44px] min-w-[44px] items-center gap-2 whitespace-nowrap rounded-md border px-3 py-2 text-sm transition;
     border-color: color-mix(in oklch, var(--border) 82%, transparent);
     background: color-mix(in oklch, var(--card) 92%, transparent);
   }
@@ -389,7 +391,7 @@
   }
 
   .primary-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-primary-foreground transition;
+    @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-primary-foreground transition;
     background: var(--primary);
   }
 
@@ -405,7 +407,7 @@
   }
 
   .secondary-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-medium transition;
+    @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-medium transition;
   }
 
   .secondary-btn:hover:not(:disabled) {
@@ -413,11 +415,11 @@
   }
 
   .text-link {
-    @apply font-medium text-[color:var(--brand-strong)] underline-offset-4 transition hover:underline;
+    @apply inline-flex min-h-[44px] items-center font-medium text-[color:var(--brand-strong)] underline-offset-4 transition hover:underline;
   }
 
   .chip-btn {
-    @apply inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-3 text-sm transition;
+    @apply inline-flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md border border-border bg-background px-3 py-3 text-sm transition;
   }
 
   .chip-btn:hover {
@@ -440,7 +442,7 @@
   }
 
   .icon-btn {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-foreground transition;
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-background text-foreground transition;
   }
 
   .icon-btn:hover {

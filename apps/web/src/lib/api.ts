@@ -20,6 +20,12 @@ const API_RETRY_ATTEMPTS = Number.isFinite(configuredRetryAttempts)
 const API_RETRY_DELAY_MS = Number.isFinite(configuredRetryDelayMs)
   ? Math.max(100, configuredRetryDelayMs)
   : 700;
+const AI_UPSTREAM_PATH_PREFIXES = ["/api/chat", "/api/insights", "/api/analyze"] as const;
+const SESSION_EXPIRED_PATTERNS = [/session expired/i, /token expired/i, /jwt/i, /authentication required/i];
+const TIMEOUT_PATTERNS = [/timeout/i, /timed out/i, /deadline exceeded/i, /request aborted/i];
+const NETWORK_UNAVAILABLE_PATTERNS = [/failed to fetch/i, /network error/i, /network request failed/i, /fetch failed/i];
+const AI_TEMPORARY_UNAVAILABLE_PATTERNS = [/temporarily unavailable/i, /unavailable/i, /overloaded/i, /busy/i, /rate limit/i];
+const AI_UPSTREAM_FAILURE_PATTERNS = [/llm/i, /gateway/i, /upstream/i, /provider/i, /model/i, /generation failed/i];
 
 export type AuthUser = {
   id?: string;
@@ -69,6 +75,102 @@ function tApi(key: TranslationKey) {
   return translate(getCurrentLocale(), key);
 }
 
+function normalizeErrorText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function extractErrorDetail(payload: any): string {
+  const direct = normalizeErrorText(payload);
+  if (direct) return direct;
+
+  const candidates = [
+    payload?.detail,
+    payload?.message,
+    payload?.error,
+    payload?.errors?.[0]?.error,
+    payload?.errors?.[0]?.detail,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeErrorText(candidate);
+    if (normalized) return normalized;
+  }
+
+  return "";
+}
+
+function isAiUpstreamPath(path: string): boolean {
+  return AI_UPSTREAM_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function matchesAnyPattern(text: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function isAuthExpiredError(status: number | undefined, detailText: string): boolean {
+  return status === 401 || (Boolean(detailText) && matchesAnyPattern(detailText, SESSION_EXPIRED_PATTERNS));
+}
+
+function isTimeoutError(status: number | undefined, detailText: string): boolean {
+  return (
+    status === 408 ||
+    status === 504 ||
+    (Boolean(detailText) && matchesAnyPattern(detailText, TIMEOUT_PATTERNS))
+  );
+}
+
+function resolveAiSpecificError(status: number | undefined, detailText: string): TranslationKey | null {
+  if (status === 502 || status === 503 || status === 504) {
+    return "api.aiUnavailable";
+  }
+
+  if (detailText && matchesAnyPattern(detailText, AI_TEMPORARY_UNAVAILABLE_PATTERNS)) {
+    return "api.aiUnavailable";
+  }
+
+  if (detailText && matchesAnyPattern(detailText, AI_UPSTREAM_FAILURE_PATTERNS)) {
+    return "api.aiFallback";
+  }
+
+  return null;
+}
+
+function resolveFriendlyErrorMessage(params: {
+  path: string;
+  status?: number;
+  detail?: unknown;
+  fallbackKey: TranslationKey;
+}): string {
+  const detailText = extractErrorDetail(params.detail);
+  const aiRequest = isAiUpstreamPath(params.path);
+
+  if (isAuthExpiredError(params.status, detailText)) {
+    return tApi("api.authExpired");
+  }
+
+  if (isTimeoutError(params.status, detailText)) {
+    return tApi("api.timeout");
+  }
+
+  if (detailText && matchesAnyPattern(detailText, NETWORK_UNAVAILABLE_PATTERNS)) {
+    return aiRequest ? tApi("api.aiUnavailable") : tApi(params.fallbackKey);
+  }
+
+  if (aiRequest) {
+    const aiErrorKey = resolveAiSpecificError(params.status, detailText);
+    if (aiErrorKey) {
+      return tApi(aiErrorKey);
+    }
+  }
+
+  if (detailText) {
+    return detailText;
+  }
+
+  return tApi(params.fallbackKey);
+}
+
 function ensureApiBaseUrl(): string {
   if (!API_BASE_URL) {
     throw new Error(tApi("api.missingBaseUrl"));
@@ -87,6 +189,12 @@ function buildAuthHeaders(options: RequestInit, token: string | null): Headers {
 
   if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
+  }
+
+  try {
+    headers.set("Accept-Encoding", "gzip");
+  } catch {
+    // Browsers can block unsafe headers; ignore to keep request resilient.
   }
 
   if (token) {
@@ -141,11 +249,17 @@ async function requestWithRetry(path: string, options: RequestInit = {}): Promis
   }
 
   if (lastNetworkError instanceof DOMException && lastNetworkError.name === "AbortError") {
-    throw new Error(tApi("api.requestError"));
+    throw new Error(tApi("api.timeout"));
   }
 
   if (lastNetworkError instanceof Error) {
-    throw new Error(lastNetworkError.message || tApi("api.requestError"));
+    throw new Error(
+      resolveFriendlyErrorMessage({
+        path,
+        detail: lastNetworkError.message,
+        fallbackKey: "api.requestError",
+      })
+    );
   }
 
   throw new Error(tApi("api.requestError"));
@@ -215,8 +329,14 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   const data = await parseResponseJson(response);
 
   if (!response.ok) {
-    const detail = data?.detail;
-    throw new Error(typeof detail === "string" ? detail : tApi("api.requestError"));
+    throw new Error(
+      resolveFriendlyErrorMessage({
+        path,
+        status: response.status,
+        detail: data,
+        fallbackKey: "api.requestError",
+      })
+    );
   }
 
   return data as T;
@@ -227,8 +347,14 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Bl
 
   if (!response.ok) {
     const data = await parseResponseJson(response);
-    const detail = data?.detail;
-    throw new Error(typeof detail === "string" ? detail : tApi("api.reportError"));
+    throw new Error(
+      resolveFriendlyErrorMessage({
+        path,
+        status: response.status,
+        detail: data,
+        fallbackKey: "api.reportError",
+      })
+    );
   }
 
   return response.blob();
@@ -313,6 +439,8 @@ export type Mention = {
   text: string;
   source: string;
   sentiment: string;
+  score?: number | null;
+  source_tier?: "S" | "A" | "B" | null;
   criticality: string;
   urgency_score?: number;
   confidence?: number;
@@ -330,10 +458,15 @@ export type DashboardMetrics = {
   total_comments?: number;
   sentiment_distribution: Record<string, number>;
   source_distribution: Record<string, number>;
+  sources_distribution?: Record<string, number>;
   top_aspects: Record<string, number>;
+  top_themes?: Record<string, number> | string[];
   critical_mentions: number;
   average_urgency: number;
+  urgency_score?: number;
   reputation_score: number;
+  sentiment_score?: number;
+  negative_count?: number;
   trend?: string;
   recent_mentions?: Mention[];
 };
@@ -465,11 +598,12 @@ export const sentimentApi = {
       body: JSON.stringify(payload),
     });
   },
-  mentions(params?: { batch_id?: string; status?: string; sentiment?: string; limit?: number }) {
+  mentions(params?: { batch_id?: string; status?: string; sentiment?: string; source?: string; limit?: number }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
     if (params?.status) query.set("status", params.status);
     if (params?.sentiment) query.set("sentiment", params.sentiment);
+    if (params?.source) query.set("source", params.source);
     if (params?.limit) query.set("limit", String(params.limit));
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiFetch<Mention[]>(`/api/mentions${suffix}`);
@@ -480,6 +614,7 @@ export const sentimentApi = {
     limit?: number;
     priority?: string;
     resolution?: string;
+    source?: string;
   }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
@@ -487,6 +622,7 @@ export const sentimentApi = {
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.priority) query.set("priority", params.priority);
     if (params?.resolution) query.set("resolution", params.resolution);
+    if (params?.source) query.set("source", params.source);
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiFetch<InsightsResponse>(`/api/insights${suffix}`);
   },
@@ -567,13 +703,13 @@ export const sentimentApi = {
       body: JSON.stringify(payload),
     });
   },
-  npsSubmit(payload: { session_id: string; module_key: string; score: number; comment?: string; route?: string }) {
+  npsSubmit(payload: { session_id: string; score: number; comment?: string; module_key?: string; route?: string }) {
     return apiFetch<{ ok: boolean }>("/api/nps/submit", {
       method: "POST",
       body: JSON.stringify(payload),
     });
   },
-  npsDismiss(payload: { session_id: string; module_key: string; route?: string }) {
+  npsDismiss(payload: { session_id: string; module_key?: string; route?: string }) {
     return apiFetch<{ ok: boolean }>("/api/nps/dismiss", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -588,6 +724,12 @@ export const sentimentApi = {
     if (params?.module_key) query.set("module_key", params.module_key);
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiFetch<NpsMetrics>(`/api/nps/metrics${suffix}`);
+  },
+  privacyConsent(payload: { session_id: string; analytics: boolean; marketing: boolean }) {
+    return apiFetch<{ ok: boolean }>("/api/privacy/consent", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   deleteConversation(id: string) {
     return apiFetch<{ ok: boolean }>(`/api/chat/threads/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -615,12 +757,20 @@ export const sentimentApi = {
   },
 };
 
-export async function downloadReport(format: "csv" | "pdf") {
-  const blob = await apiFetchBlob(`/api/reports/export/${format}`);
+export async function downloadReport(
+  format: "csv" | "pdf",
+  params?: { source?: string; filename?: string }
+) {
+  const query = new URLSearchParams();
+  if (params?.source) query.set("source", params.source);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const blob = await apiFetchBlob(`/api/reports/export/${format}${suffix}`);
   const url = globalThis.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = format === "csv" ? "relatorio_sentimento.csv" : "relatorio_sentimento.pdf";
+  link.download =
+    params?.filename ||
+    (format === "csv" ? "relatorio_sentimento.csv" : "relatorio_sentimento.pdf");
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -629,11 +779,12 @@ export async function downloadReport(format: "csv" | "pdf") {
 
 export async function downloadInsightsReport(
   format: "markdown" | "pdf",
-  params?: { priority?: string; resolution?: string; limit?: number }
+  params?: { priority?: string; resolution?: string; source?: string; limit?: number }
 ) {
   const query = new URLSearchParams();
   if (params?.priority) query.set("priority", params.priority);
   if (params?.resolution) query.set("resolution", params.resolution);
+  if (params?.source) query.set("source", params.source);
   if (params?.limit) query.set("limit", String(params.limit));
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
