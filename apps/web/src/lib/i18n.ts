@@ -158,8 +158,8 @@ export const TRANSLATIONS = {
     "en-US": "Understand your brand reputation before small signals become a crisis.",
   },
   "home.subtitle": {
-    "pt-BR": "Colete menções reais em Reclame Aqui, Reddit e Web, identifique criticidade, gere insights com IA e transforme ruído digital em decisões comerciais claras.",
-    "en-US": "Collect real mentions on Reclame Aqui, Reddit, and Web, identify criticality, generate AI insights, and turn digital noise into clear business decisions.",
+    "pt-BR": "Colete menções reais, identifique criticidade, gere insights com IA e transforme ruído digital em decisões comerciais claras.",
+    "en-US": "Collect real mentions, identify criticality, generate AI insights, and turn digital noise into clear business decisions.",
   },
   "home.primaryCta": {
     "pt-BR": "Começar agora",
@@ -174,8 +174,8 @@ export const TRANSLATIONS = {
     "en-US": "Monitored sources",
   },
   "home.metricMentionsValue": {
-    "pt-BR": "Reclame Aqui · Reddit · Web",
-    "en-US": "Reclame Aqui · Reddit · Web",
+    "pt-BR": "Reclame Aqui · Reddit · YouTube · App Store · Google Play · Glassdoor · Trustpilot · Web",
+    "en-US": "Reclame Aqui · Reddit · YouTube · App Store · Google Play · Glassdoor · Trustpilot · Web",
   },
   "home.metricInsights": {
     "pt-BR": "Insights acionáveis",
@@ -222,8 +222,8 @@ export const TRANSLATIONS = {
     "en-US": "Collection on monitored sources",
   },
   "home.featureCollectionText": {
-    "pt-BR": "Monitore somente Reclame Aqui, Reddit e Web com coleta incremental.",
-    "en-US": "Monitor only Reclame Aqui, Reddit, and Web with incremental collection.",
+    "pt-BR": "Monitore as fontes ativas com coleta incremental.",
+    "en-US": "Monitor active sources with incremental collection.",
   },
   "home.featureAiTitle": {
     "pt-BR": "Leitura de criticidade",

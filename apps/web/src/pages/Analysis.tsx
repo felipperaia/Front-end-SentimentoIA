@@ -37,7 +37,7 @@ export default function AnalysisPage() {
         priority: priorityFilter === "all" ? undefined : priorityFilter,
         resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
       };
-      const params = sourceFilter !== "all" ? { ...existingParams, source: sourceFilter } : existingParams;
+      const params = sourceFilter === "all" ? existingParams : { ...existingParams, source: sourceFilter };
       const response = await sentimentApi.insights(params);
       setItems(response.items ?? []);
     } catch (err) {

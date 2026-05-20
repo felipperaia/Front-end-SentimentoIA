@@ -22,9 +22,9 @@ export default function ReportsPage() {
     limit,
   };
   const insightExportParams =
-    sourceFilter !== "all"
-      ? { ...existingInsightExportParams, source: sourceFilter }
-      : existingInsightExportParams;
+    sourceFilter === "all"
+      ? existingInsightExportParams
+      : { ...existingInsightExportParams, source: sourceFilter };
 
   async function handleDownload(format: "csv" | "pdf") {
     const action = format;
@@ -32,7 +32,7 @@ export default function ReportsPage() {
     setLastFailedExport(null);
 
     try {
-      const source = sourceFilter !== "all" ? sourceFilter : undefined;
+      const source = sourceFilter === "all" ? undefined : sourceFilter;
       const dateTag = new Date().toISOString().slice(0, 10);
       const filename =
         format === "csv" && source
