@@ -158,8 +158,8 @@ export const TRANSLATIONS = {
     "en-US": "Understand your brand reputation before small signals become a crisis.",
   },
   "home.subtitle": {
-    "pt-BR": "Colete menções reais, identifique criticidade, gere insights com IA e transforme ruído digital em decisões comerciais claras.",
-    "en-US": "Collect real mentions, identify criticality, generate AI insights, and turn digital noise into clear business decisions.",
+    "pt-BR": "Colete menções reais em Reclame Aqui, Reddit e Web, identifique criticidade, gere insights com IA e transforme ruído digital em decisões comerciais claras.",
+    "en-US": "Collect real mentions on Reclame Aqui, Reddit, and Web, identify criticality, generate AI insights, and turn digital noise into clear business decisions.",
   },
   "home.primaryCta": {
     "pt-BR": "Começar agora",
@@ -172,6 +172,10 @@ export const TRANSLATIONS = {
   "home.metricMentions": {
     "pt-BR": "Fontes monitoradas",
     "en-US": "Monitored sources",
+  },
+  "home.metricMentionsValue": {
+    "pt-BR": "Reclame Aqui · Reddit · Web",
+    "en-US": "Reclame Aqui · Reddit · Web",
   },
   "home.metricInsights": {
     "pt-BR": "Insights acionáveis",
@@ -214,12 +218,12 @@ export const TRANSLATIONS = {
     "en-US": "Everything teams need to run reputation with cadence.",
   },
   "home.featureCollectionTitle": {
-    "pt-BR": "Coleta multicanal",
-    "en-US": "Multi-channel collection",
+    "pt-BR": "Coleta nas fontes monitoradas",
+    "en-US": "Collection on monitored sources",
   },
   "home.featureCollectionText": {
-    "pt-BR": "Busque menções em Reddit, Reclame Aqui e Web aberto com coleta incremental.",
-    "en-US": "Search mentions across Reddit, Reclame Aqui, and open Web with incremental collection.",
+    "pt-BR": "Monitore somente Reclame Aqui, Reddit e Web com coleta incremental.",
+    "en-US": "Monitor only Reclame Aqui, Reddit, and Web with incremental collection.",
   },
   "home.featureAiTitle": {
     "pt-BR": "Leitura de criticidade",

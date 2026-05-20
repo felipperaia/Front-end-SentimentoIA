@@ -117,7 +117,7 @@ export default function Home() {
             </div>
 
             <div className="mt-12 grid gap-3 sm:grid-cols-3">
-              <HeroMetric label={t("home.metricMentions")} value="Reclame Aqui · Reddit · Web" />
+              <HeroMetric label={t("home.metricMentions")} value={t("home.metricMentionsValue")} />
               <HeroMetric label={t("home.metricInsights")} value="Backend API" />
               <HeroMetric label={t("home.metricReports")} value="CSV · PDF" />
             </div>
