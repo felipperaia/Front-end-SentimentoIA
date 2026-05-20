@@ -10,6 +10,7 @@ import { Streamdown } from "streamdown";
  * Message type matching backend chat message interface.
  */
 export type Message = {
+  id?: string;
   role: "system" | "user" | "assistant";
   content: string;
 };
@@ -104,7 +105,7 @@ export function AIChatBox({
   height = "600px",
   emptyStateMessage = "Start a conversation with AI",
   suggestedPrompts,
-}: AIChatBoxProps) {
+}: Readonly<AIChatBoxProps>) {
   const [input, setInput] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -193,9 +194,9 @@ export function AIChatBox({
 
               {suggestedPrompts && suggestedPrompts.length > 0 && (
                 <div className="flex max-w-2xl flex-wrap justify-center gap-2">
-                  {suggestedPrompts.map((prompt, index) => (
+                  {suggestedPrompts.map((prompt) => (
                     <button
-                      key={index}
+                      key={prompt}
                       onClick={() => onSendMessage(prompt)}
                       disabled={isLoading}
                       className="rounded-lg border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -215,10 +216,12 @@ export function AIChatBox({
                 const isLastMessage = index === displayMessages.length - 1;
                 const shouldApplyMinHeight =
                   isLastMessage && !isLoading && minHeightForLastMessage > 0;
+                const messageKey =
+                  message.id || `${message.role}-${index}-${(message.content || "").slice(0, 24)}`;
 
                 return (
                   <div
-                    key={index}
+                    key={messageKey}
                     className={cn(
                       "flex gap-3",
                       message.role === "user"

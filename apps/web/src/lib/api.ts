@@ -26,6 +26,7 @@ const TIMEOUT_PATTERNS = [/timeout/i, /timed out/i, /deadline exceeded/i, /reque
 const NETWORK_UNAVAILABLE_PATTERNS = [/failed to fetch/i, /network error/i, /network request failed/i, /fetch failed/i];
 const AI_TEMPORARY_UNAVAILABLE_PATTERNS = [/temporarily unavailable/i, /unavailable/i, /overloaded/i, /busy/i, /rate limit/i];
 const AI_UPSTREAM_FAILURE_PATTERNS = [/llm/i, /gateway/i, /upstream/i, /provider/i, /model/i, /generation failed/i];
+const INTERNAL_ERROR_DETAIL_PATTERNS = [/traceback/i, /stack/i, /exception/i, /gateway/i, /upstream/i, /model/i, /ollama/i];
 
 export type AuthUser = {
   id?: string;
@@ -164,6 +165,10 @@ function resolveFriendlyErrorMessage(params: {
     }
   }
 
+  if (detailText && matchesAnyPattern(detailText, INTERNAL_ERROR_DETAIL_PATTERNS)) {
+    return aiRequest ? tApi("api.aiFallback") : tApi(params.fallbackKey);
+  }
+
   if (detailText) {
     return detailText;
   }
@@ -278,6 +283,240 @@ async function parseResponseJson(response: Response): Promise<any> {
   }
 }
 
+function parseFilenameFromDisposition(dispositionHeader: string | null): string | null {
+  if (!dispositionHeader) return null;
+
+  const utfMatch = /filename\*=UTF-8''([^;]+)/i.exec(dispositionHeader);
+  if (utfMatch?.[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1].trim());
+    } catch {
+      return utfMatch[1].trim();
+    }
+  }
+
+  const plainMatch = /filename="?([^";]+)"?/i.exec(dispositionHeader);
+  if (plainMatch?.[1]) {
+    return plainMatch[1].trim();
+  }
+
+  return null;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = globalThis.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  globalThis.URL.revokeObjectURL(url);
+}
+
+function ensureObject(value: unknown): Record<string, any> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, any>;
+}
+
+function ensureArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function asString(value: unknown, fallback = ""): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || fallback;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return fallback;
+}
+
+function asNullableString(value: unknown): string | undefined {
+  const resolved = asString(value, "");
+  return resolved || undefined;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeNumericRecord(value: unknown): Record<string, number> {
+  const raw = ensureObject(value);
+  const output: Record<string, number> = {};
+  for (const [key, item] of Object.entries(raw)) {
+    const parsed = Number(item);
+    if (Number.isFinite(parsed)) {
+      output[key] = parsed;
+    }
+  }
+  return output;
+}
+
+function normalizeSourceTier(value: unknown): "S" | "A" | "B" | null {
+  const normalized = asString(value, "").toUpperCase();
+  if (normalized === "S" || normalized === "A" || normalized === "B") {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizeMention(item: unknown): Mention {
+  const raw = ensureObject(item);
+  return {
+    id: asString(raw.id || raw._id || raw.external_id, "unknown"),
+    brand_id: asNullableString(raw.brand_id),
+    brand_name: asNullableString(raw.brand_name || raw.query || raw.entity),
+    text: asString(raw.text || raw.snippet || raw.title, ""),
+    source: asString(raw.source, "web"),
+    sentiment: asString(raw.sentiment, "neutro"),
+    score: raw.score === null || raw.score === undefined ? null : asNumber(raw.score, 0),
+    source_tier: normalizeSourceTier(raw.source_tier),
+    criticality: asString(raw.criticality, "baixa"),
+    urgency_score: asNumber(raw.urgency_score, 0),
+    confidence: raw.confidence === null || raw.confidence === undefined ? undefined : asNumber(raw.confidence, 0),
+    aspects: ensureArray<string>(raw.aspects),
+    critical_terms: ensureArray<string>(raw.critical_terms),
+    rating: raw.rating === null || raw.rating === undefined ? undefined : asNumber(raw.rating, 0),
+    author: asNullableString(raw.author),
+    url: asNullableString(raw.url || raw.canonical_url),
+    published_at: asNullableString(raw.published_at),
+    created_at: asNullableString(raw.created_at),
+  };
+}
+
+function normalizeInsight(item: unknown): InsightItem {
+  const raw = ensureObject(item);
+  return {
+    id: asString(raw.id || raw._id || raw.insight_id || raw.context_id, "unknown"),
+    insight_id: asNullableString(raw.insight_id),
+    job_id: asNullableString(raw.job_id),
+    user_id: asNullableString(raw.user_id),
+    batch_id: asNullableString(raw.batch_id),
+    context_id: asNullableString(raw.context_id),
+    context_type: asNullableString(raw.context_type),
+    company: asNullableString(raw.company || raw.snapshot?.brand),
+    trigger: asNullableString(raw.trigger),
+    archived: Boolean(raw.archived),
+    priority: asNullableString(raw.priority),
+    urgency: asNullableString(raw.urgency),
+    root_cause: asNullableString(raw.root_cause),
+    recommended_action: asNullableString(raw.recommended_action),
+    status: asNullableString(raw.status),
+    resolution: asNullableString(raw.resolution),
+    timestamp: asNullableString(raw.timestamp),
+    executive_summary: asNullableString(raw.executive_summary),
+    sentiment_overview: asNullableString(raw.sentiment_overview),
+    risks: ensureArray<string>(raw.risks),
+    opportunities: ensureArray<string>(raw.opportunities),
+    recommended_actions: ensureArray<string>(raw.recommended_actions),
+    decision_guidance: asNullableString(raw.decision_guidance),
+    trend: asNullableString(raw.trend),
+    created_at: asNullableString(raw.created_at),
+    updated_at: asNullableString(raw.updated_at),
+  };
+}
+
+function normalizeSearchErrors(errors: unknown): Array<{ source?: string; error?: string } | string> {
+  return ensureArray<any>(errors)
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return entry;
+      }
+
+      const raw = ensureObject(entry);
+      const source = asString(raw.source || raw.name, "fonte");
+      const error = asString(raw.error || raw.detail || raw.message, "Erro temporario na coleta");
+      return { source, error };
+    })
+    .filter(Boolean);
+}
+
+function normalizeChatThread(item: unknown): ChatThread {
+  const raw = ensureObject(item);
+  const threadId = asString(raw.thread_id || raw.id, "");
+  return {
+    id: asString(raw.id || threadId, threadId || "unknown"),
+    thread_id: threadId || asString(raw.id, "unknown"),
+    title: asString(raw.title, "Nova conversa"),
+    locale: asNullableString(raw.locale),
+    archived: raw.archived === undefined ? undefined : Boolean(raw.archived),
+    created_at: asNullableString(raw.created_at),
+    updated_at: asNullableString(raw.updated_at),
+    last_message_at: asNullableString(raw.last_message_at),
+  };
+}
+
+function normalizeChatMessage(item: unknown): ChatMessage {
+  const raw = ensureObject(item);
+  const messageId = asString(raw.message_id || raw.id, "");
+  const role = asString(raw.role, "assistant").toLowerCase();
+  return {
+    id: asString(raw.id || messageId, messageId || "unknown"),
+    message_id: messageId || asString(raw.id, "unknown"),
+    thread_id: asString(raw.thread_id, ""),
+    role: role === "system" || role === "user" || role === "assistant" ? role : "assistant",
+    content: asString(raw.content, ""),
+    created_at: asNullableString(raw.created_at),
+  };
+}
+
+function normalizeDashboardMetrics(rawMetrics: unknown, mentions: Mention[] = []): Partial<DashboardMetrics> {
+  const raw = ensureObject(rawMetrics);
+  const totalMentions = asNumber(raw.total_mentions, mentions.length);
+  const sentimentDistribution = normalizeNumericRecord(raw.sentiment_distribution);
+  const sourceDistribution = normalizeNumericRecord(raw.source_distribution || raw.sources_distribution);
+  const sourcesDistribution = normalizeNumericRecord(raw.sources_distribution || raw.source_distribution);
+  const topAspects = normalizeNumericRecord(raw.top_aspects);
+
+  let topThemes: Record<string, number> | string[] | undefined;
+  if (Array.isArray(raw.top_themes)) {
+    topThemes = ensureArray<string>(raw.top_themes);
+  } else {
+    topThemes = normalizeNumericRecord(raw.top_themes || raw.top_aspects);
+  }
+
+  return {
+    total_mentions: totalMentions,
+    total_comments: asNumber(raw.total_comments, totalMentions),
+    sentiment_distribution: sentimentDistribution,
+    source_distribution: sourceDistribution,
+    sources_distribution: sourcesDistribution,
+    top_aspects: topAspects,
+    top_themes: topThemes,
+    critical_mentions: asNumber(raw.critical_mentions, 0),
+    average_urgency: asNumber(raw.average_urgency, 0),
+    urgency_score: raw.urgency_score === undefined || raw.urgency_score === null ? undefined : asNumber(raw.urgency_score, 0),
+    reputation_score: asNumber(raw.reputation_score, 0),
+    sentiment_score: raw.sentiment_score === undefined || raw.sentiment_score === null ? undefined : asNumber(raw.sentiment_score, 0),
+    negative_count: raw.negative_count === undefined || raw.negative_count === null ? undefined : asNumber(raw.negative_count, 0),
+    trend: asNullableString(raw.trend),
+    recent_mentions: ensureArray<any>(raw.recent_mentions).map(normalizeMention),
+  };
+}
+
+function normalizeScrapeItem(item: unknown, fallbackSource: string): ScrapeItem {
+  const raw = ensureObject(item);
+  return {
+    source: asString(raw.source, fallbackSource),
+    title: asString(raw.title, "Resultado"),
+    url: asString(raw.url || raw.canonical_url, ""),
+    snippet: asString(raw.snippet || raw.text, ""),
+    author: asNullableString(raw.author) ?? null,
+    published_at: asNullableString(raw.published_at) ?? null,
+    canonical_url: asNullableString(raw.canonical_url) ?? null,
+    content_hash: asNullableString(raw.content_hash),
+    quality_score: raw.quality_score === undefined || raw.quality_score === null ? undefined : asNumber(raw.quality_score, 0),
+    source_priority:
+      raw.source_priority === undefined || raw.source_priority === null ? undefined : asNumber(raw.source_priority, 0),
+  };
+}
+
 export type ChatThread = {
   id: string;
   thread_id: string;
@@ -342,7 +581,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return data as T;
 }
 
-async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string | null }> {
   const response = await requestWithRetry(path, options);
 
   if (!response.ok) {
@@ -357,7 +596,9 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Bl
     );
   }
 
-  return response.blob();
+  const blob = await response.blob();
+  const filename = parseFilenameFromDisposition(response.headers.get("content-disposition"));
+  return { blob, filename };
 }
 
 export const authApi = {
@@ -539,7 +780,19 @@ export type SearchResponse = {
   errors?: Array<{ source?: string; error?: string } | string>;
 };
 
-export type ScrapeSource = "reclameaqui" | "reddit" | "web";
+export type ScrapeSource =
+  | "reclameaqui"
+  | "reddit"
+  | "youtube"
+  | "appstore"
+  | "playstore"
+  | "glassdoor"
+  | "trustpilot"
+  | "mastodon"
+  | "web"
+  | "google"
+  | "x"
+  | "twitter";
 
 export type ScrapeItem = {
   source: string;
@@ -577,44 +830,140 @@ export type ScrapeResponse = {
   };
 };
 
+export type IntegrationSourceMetadata = {
+  name: string;
+  type: string;
+  base_url?: string;
+  active: boolean;
+  priority: number;
+  fetch_mode: string;
+  rate_limit_per_minute: number;
+  parser: string;
+  deprecated?: boolean;
+};
+
+export type IntegrationsStatusResponse = {
+  scraping_enabled: boolean;
+  scraper_delay_seconds: number;
+  scraper_default_limit: number;
+  scraper_default_sources: string[];
+  scraper_active_sources: string[];
+  scraper_source_metadata: IntegrationSourceMetadata[];
+  mongodb_configured: boolean;
+  llm?: Record<string, any>;
+  external_source_apis_removed?: boolean;
+};
+
 export const sentimentApi = {
-  dashboard(params?: { batch_id?: string; period_days?: number; limit_mentions?: number }) {
+  async dashboard(params?: { batch_id?: string; period_days?: number; limit_mentions?: number }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
     if (params?.period_days) query.set("period_days", String(params.period_days));
     if (params?.limit_mentions) query.set("limit_mentions", String(params.limit_mentions));
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return apiFetch<DashboardResponse>(`/api/dashboard${suffix}`);
+    const raw = await apiFetch<any>(`/api/dashboard${suffix}`);
+    const data = ensureObject(raw);
+    const mentions = ensureArray<any>(data.mentions).map(normalizeMention);
+
+    return {
+      search_id: asNullableString(data.search_id || data.batch_id) ?? null,
+      batch_id: asNullableString(data.batch_id || data.search_id) ?? null,
+      query: asNullableString(data.query),
+      metrics: normalizeDashboardMetrics(data.metrics, mentions),
+      mentions,
+      latest_insight: data.latest_insight ? normalizeInsight(data.latest_insight) : null,
+      alerts: ensureArray<any>(data.alerts),
+      llm_analysis: ensureObject(data.llm_analysis),
+      errors: normalizeSearchErrors(data.errors),
+    };
   },
-  search(payload: { brand_name: string; sources: string[]; period_days?: number; locality?: string }) {
-    return apiFetch<SearchResponse>("/api/search", {
+  async search(payload: {
+    brand_name?: string;
+    query?: string;
+    sources: string[];
+    period_days?: number;
+    locality?: string;
+    replace_existing?: boolean;
+    limit?: number;
+    sentiment_filter?: string;
+    min_criticality?: string;
+  }) {
+    const raw = await apiFetch<any>("/api/search", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+
+    const data = ensureObject(raw);
+    const mentions = ensureArray<any>(data.mentions).map(normalizeMention);
+
+    return {
+      search_id: asString(data.search_id, ""),
+      query: asNullableString(data.query || payload.brand_name || payload.query),
+      cached: Boolean(data.cached),
+      total: asNumber(data.total, mentions.length),
+      mentions,
+      metrics: normalizeDashboardMetrics(data.metrics, mentions),
+      llm_analysis: ensureObject(data.llm_analysis),
+      alerts: ensureArray<any>(data.alerts),
+      errors: normalizeSearchErrors(data.errors),
+    } as SearchResponse;
   },
-  scrape(payload: { query: string; sources: ScrapeSource[]; limit_per_source?: number }) {
-    return apiFetch<ScrapeResponse>("/api/scrape", {
+  async scrape(payload: { query: string; sources: ScrapeSource[]; limit_per_source?: number; limit?: number }) {
+    const raw = await apiFetch<any>("/api/scrape", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+
+    const data = ensureObject(raw);
+    const requestedSources = payload.sources.map((source) => asString(source));
+    const rawResults = ensureObject(data.results);
+    const results: Record<string, ScrapeItem[]> = {};
+
+    for (const source of requestedSources) {
+      const sourceItems = ensureArray<any>(rawResults[source]);
+      results[source] = sourceItems.map((item) => normalizeScrapeItem(item, source));
+    }
+
+    for (const [source, sourceItems] of Object.entries(rawResults)) {
+      if (!results[source]) {
+        results[source] = ensureArray<any>(sourceItems).map((item) => normalizeScrapeItem(item, source));
+      }
+    }
+
+    const errors = ensureArray<any>(data.errors).map((entry) => {
+      const item = ensureObject(entry);
+      return {
+        source: asString(item.source, "unknown"),
+        error: asString(item.error || item.detail || item.message, "Falha temporaria na coleta da fonte"),
+      };
+    });
+
+    return {
+      query: asString(data.query, payload.query),
+      sources: ensureArray<string>(data.sources).length > 0 ? ensureArray<string>(data.sources) : requestedSources,
+      limit_per_source: asNumber(data.limit_per_source, payload.limit_per_source || payload.limit || 5),
+      total: asNumber(data.total, Object.values(results).reduce((acc, items) => acc + items.length, 0)),
+      results,
+      errors,
+      metadata: ensureObject(data.metadata) as ScrapeResponse["metadata"],
+    };
   },
-  mentions(params?: { batch_id?: string; status?: string; sentiment?: string; source?: string; limit?: number }) {
+  async mentions(params?: { batch_id?: string; status?: string; sentiment?: string; limit?: number }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
     if (params?.status) query.set("status", params.status);
     if (params?.sentiment) query.set("sentiment", params.sentiment);
-    if (params?.source) query.set("source", params.source);
     if (params?.limit) query.set("limit", String(params.limit));
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return apiFetch<Mention[]>(`/api/mentions${suffix}`);
+    const raw = await apiFetch<any>(`/api/mentions${suffix}`);
+    return ensureArray<any>(raw).map(normalizeMention);
   },
-  insights(params?: {
+  async insights(params?: {
     batch_id?: string;
     include_archived?: boolean;
     limit?: number;
     priority?: string;
     resolution?: string;
-    source?: string;
   }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
@@ -622,18 +971,26 @@ export const sentimentApi = {
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.priority) query.set("priority", params.priority);
     if (params?.resolution) query.set("resolution", params.resolution);
-    if (params?.source) query.set("source", params.source);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return apiFetch<InsightsResponse>(`/api/insights${suffix}`);
+    const raw = await apiFetch<any>(`/api/insights${suffix}`);
+    const data = ensureObject(raw);
+    return {
+      items: ensureArray<any>(data.items).map(normalizeInsight),
+    };
   },
-  generateInsight(payload?: { batch_id?: string; force?: boolean }) {
-    return apiFetch<{ ok: boolean; item: InsightItem }>("/api/insights/generate", {
+  async generateInsight(payload?: { batch_id?: string; force?: boolean }) {
+    const raw = await apiFetch<any>("/api/insights/generate", {
       method: "POST",
       body: JSON.stringify({
         batch_id: payload?.batch_id ?? null,
         force: Boolean(payload?.force),
       }),
     });
+    const data = ensureObject(raw);
+    return {
+      ok: Boolean(data.ok),
+      item: normalizeInsight(data.item),
+    };
   },
   archiveInsight(insightId: string) {
     return apiFetch<{ ok: boolean }>(`/api/insights/${encodeURIComponent(insightId)}/archive`, {
@@ -645,10 +1002,15 @@ export const sentimentApi = {
       method: "DELETE",
     });
   },
-  regenerateInsight(insightId: string) {
-    return apiFetch<{ ok: boolean; item: InsightItem }>(`/api/insights/${encodeURIComponent(insightId)}/regenerate`, {
+  async regenerateInsight(insightId: string) {
+    const raw = await apiFetch<any>(`/api/insights/${encodeURIComponent(insightId)}/regenerate`, {
       method: "POST",
     });
+    const data = ensureObject(raw);
+    return {
+      ok: Boolean(data.ok),
+      item: normalizeInsight(data.item),
+    };
   },
   getSettings() {
     return apiFetch<UserSettings>("/api/settings");
@@ -659,29 +1021,44 @@ export const sentimentApi = {
       body: JSON.stringify(payload),
     });
   },
-  listChatThreads(limit = 20) {
-    return apiFetch<{ items: ChatThread[] }>(`/api/chat/threads?limit=${Math.max(1, Math.min(limit, 200))}`);
+  async listChatThreads(limit = 20) {
+    const raw = await apiFetch<any>(`/api/chat/threads?limit=${Math.max(1, Math.min(limit, 200))}`);
+    const data = ensureObject(raw);
+    return {
+      items: ensureArray<any>(data.items).map(normalizeChatThread),
+    };
   },
-  createChatThread(payload?: { title?: string }) {
-    return apiFetch<{ item: ChatThread }>("/api/chat/threads", {
+  async createChatThread(payload?: { title?: string }) {
+    const raw = await apiFetch<any>("/api/chat/threads", {
       method: "POST",
       body: JSON.stringify({ title: payload?.title ?? null }),
     });
+    const data = ensureObject(raw);
+    return {
+      item: normalizeChatThread(data.item),
+    };
   },
-  listChatMessages(threadId: string, limit = 100) {
-    return apiFetch<{ items: ChatMessage[] }>(
+  async listChatMessages(threadId: string, limit = 100) {
+    const raw = await apiFetch<any>(
       `/api/chat/threads/${encodeURIComponent(threadId)}/messages?limit=${Math.max(1, Math.min(limit, 500))}`
     );
+    const data = ensureObject(raw);
+    return {
+      items: ensureArray<any>(data.items).map(normalizeChatMessage),
+    };
   },
-  sendChatMessage(threadId: string, content: string) {
-    return apiFetch<{
-      thread: ChatThread;
-      user_message: ChatMessage;
-      assistant_message: ChatMessage;
-    }>(`/api/chat/threads/${encodeURIComponent(threadId)}/messages`, {
+  async sendChatMessage(threadId: string, content: string) {
+    const raw = await apiFetch<any>(`/api/chat/threads/${encodeURIComponent(threadId)}/messages`, {
       method: "POST",
       body: JSON.stringify({ content }),
     });
+
+    const data = ensureObject(raw);
+    return {
+      thread: normalizeChatThread(data.thread),
+      user_message: normalizeChatMessage(data.user_message),
+      assistant_message: normalizeChatMessage(data.assistant_message),
+    };
   },
   deleteChatThread(threadId: string) {
     return apiFetch<{ ok: boolean }>(`/api/chat/threads/${encodeURIComponent(threadId)}`, {
@@ -697,11 +1074,12 @@ export const sentimentApi = {
   deleteAllChatThreads() {
     return apiFetch<{ ok: boolean }>("/api/chat/threads", { method: "DELETE" });
   },
-  analyze(payload: { text: string; brand_name?: string; source?: string }) {
-    return apiFetch<Mention>("/api/analyze", {
+  async analyze(payload: { text: string; brand_name?: string; source?: string }) {
+    const raw = await apiFetch<any>("/api/analyze", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+    return normalizeMention(raw);
   },
   npsSubmit(payload: { session_id: string; score: number; comment?: string; module_key?: string; route?: string }) {
     return apiFetch<{ ok: boolean }>("/api/nps/submit", {
@@ -715,21 +1093,79 @@ export const sentimentApi = {
       body: JSON.stringify(payload),
     });
   },
-  npsCheck(sessionId: string) {
-    return apiFetch<{ should_show: boolean }>(`/api/nps/check?session_id=${encodeURIComponent(sessionId)}`);
+  async npsCheck(sessionId: string) {
+    const raw = await apiFetch<any>(
+      `/api/nps/check?session_id=${encodeURIComponent(sessionId)}`
+    );
+    const data = ensureObject(raw);
+    return {
+      should_show: Boolean(data.should_show),
+      trigger: asNullableString(data.trigger) ?? null,
+    };
   },
-  npsMetrics(params?: { period_days?: number; module_key?: string }) {
+  async npsMetrics(params?: { period_days?: number; module_key?: string }) {
     const query = new URLSearchParams();
     if (params?.period_days) query.set("period_days", String(params.period_days));
     if (params?.module_key) query.set("module_key", params.module_key);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return apiFetch<NpsMetrics>(`/api/nps/metrics${suffix}`);
+    const raw = await apiFetch<any>(`/api/nps/metrics${suffix}`);
+    const data = ensureObject(raw);
+    return {
+      total_responses: asNumber(data.total_responses, 0),
+      promoters: asNumber(data.promoters, 0),
+      passives: asNumber(data.passives, 0),
+      detractors: asNumber(data.detractors, 0),
+      nps_score: asNumber(data.nps_score, 0),
+      average_score: asNumber(data.average_score, 0),
+      by_module: ensureObject(data.by_module) as NpsMetrics["by_module"],
+      recent_comments: ensureArray<any>(data.recent_comments).map((item) => {
+        const rawComment = ensureObject(item);
+        return {
+          comment: asString(rawComment.comment, ""),
+          score: asNumber(rawComment.score, 0),
+          module_key: asString(rawComment.module_key, "geral"),
+          created_at: asString(rawComment.created_at, ""),
+        };
+      }),
+    };
   },
   privacyConsent(payload: { session_id: string; analytics: boolean; marketing: boolean }) {
     return apiFetch<{ ok: boolean }>("/api/privacy/consent", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+  async integrationsStatus() {
+    const raw = await apiFetch<any>("/api/status/integrations");
+    const data = ensureObject(raw);
+    return {
+      scraping_enabled: Boolean(data.scraping_enabled),
+      scraper_delay_seconds: asNumber(data.scraper_delay_seconds, 0),
+      scraper_default_limit: asNumber(data.scraper_default_limit, 5),
+      scraper_default_sources: ensureArray<string>(data.scraper_default_sources),
+      scraper_active_sources: ensureArray<string>(data.scraper_active_sources),
+      scraper_source_metadata: ensureArray<IntegrationSourceMetadata>(data.scraper_source_metadata),
+      mongodb_configured: Boolean(data.mongodb_configured),
+      llm: ensureObject(data.llm),
+      external_source_apis_removed: Boolean(data.external_source_apis_removed),
+    };
+  },
+  async searchHistory(limit = 20) {
+    const raw = await apiFetch<any>(
+      `/api/search/history?limit=${Math.max(1, Math.min(limit, 100))}`
+    );
+    const data = ensureObject(raw);
+    return {
+      history: ensureArray<any>(data.history).map((item) => {
+        const rawItem = ensureObject(item);
+        return {
+          search_id: asNullableString(rawItem.search_id),
+          query: asNullableString(rawItem.query),
+          created_at: asNullableString(rawItem.created_at),
+          status: asNullableString(rawItem.status),
+        };
+      }),
+    };
   },
   deleteConversation(id: string) {
     return apiFetch<{ ok: boolean }>(`/api/chat/threads/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -759,42 +1195,32 @@ export const sentimentApi = {
 
 export async function downloadReport(
   format: "csv" | "pdf",
-  params?: { source?: string; filename?: string }
+  params?: { source?: string; filename?: string; search_id?: string }
 ) {
   const query = new URLSearchParams();
+  if (params?.search_id) query.set("search_id", params.search_id);
   if (params?.source) query.set("source", params.source);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const blob = await apiFetchBlob(`/api/reports/export/${format}${suffix}`);
-  const url = globalThis.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download =
+  const endpoint = params?.search_id ? `/api/reports/${format}${suffix}` : `/api/reports/export/${format}${suffix}`;
+  const { blob, filename } = await apiFetchBlob(endpoint);
+  const resolvedFilename =
+    filename ||
     params?.filename ||
     (format === "csv" ? "relatorio_sentimento.csv" : "relatorio_sentimento.pdf");
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  globalThis.URL.revokeObjectURL(url);
+  triggerBlobDownload(blob, resolvedFilename);
 }
 
 export async function downloadInsightsReport(
   format: "markdown" | "pdf",
-  params?: { priority?: string; resolution?: string; source?: string; limit?: number }
+  params?: { priority?: string; resolution?: string; limit?: number }
 ) {
   const query = new URLSearchParams();
   if (params?.priority) query.set("priority", params.priority);
   if (params?.resolution) query.set("resolution", params.resolution);
-  if (params?.source) query.set("source", params.source);
   if (params?.limit) query.set("limit", String(params.limit));
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const blob = await apiFetchBlob(`/api/insights/export/${format}${suffix}`);
-  const url = globalThis.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = format === "markdown" ? "insights.md" : "insights.pdf";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  globalThis.URL.revokeObjectURL(url);
+  const { blob, filename } = await apiFetchBlob(`/api/insights/export/${format}${suffix}`);
+  const resolvedFilename = filename || (format === "markdown" ? "insights.md" : "insights.pdf");
+  triggerBlobDownload(blob, resolvedFilename);
 }

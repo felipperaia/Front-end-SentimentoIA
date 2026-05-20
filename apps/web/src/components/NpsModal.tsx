@@ -4,12 +4,27 @@ import { MessageSquare, Star, X } from "lucide-react";
 
 const SEARCH_COMPLETED_EVENT = "sentimentoia:search-completed";
 const NPS_HANDLED_KEY = "sentimentoia_nps_handled";
+const NPS_SESSION_ID_KEY = "sentimentoia_nps_session_id";
+const NPS_ENABLED = String(import.meta.env.VITE_ENABLE_NPS ?? "true") !== "false";
+
+function currentRoutePath() {
+  if (globalThis.window === undefined) return undefined;
+  return globalThis.window.location.pathname || undefined;
+}
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getOrCreateNpsSessionId() {
+  const current = sessionStorage.getItem(NPS_SESSION_ID_KEY);
+  if (current) return current;
+  const next = createSessionId();
+  sessionStorage.setItem(NPS_SESSION_ID_KEY, next);
+  return next;
 }
 
 function hasHandledNpsInSession() {
@@ -27,31 +42,44 @@ export default function NpsModal() {
   const [sending, setSending] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const delayedOpenRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkingRef = useRef(false);
 
   const checkAndOpenNps = useCallback(async () => {
+    if (!NPS_ENABLED) return;
     if (!getToken()) return;
     if (hasHandledNpsInSession()) return;
+    if (visible) return;
+    if (checkingRef.current) return;
 
-    const nextSessionId = createSessionId();
+    checkingRef.current = true;
+
+    const nextSessionId = getOrCreateNpsSessionId();
     setSessionId(nextSessionId);
 
     try {
-      const { should_show } = await sentimentApi.npsCheck(nextSessionId);
+      const { should_show, trigger } = await sentimentApi.npsCheck(nextSessionId);
       if (!should_show) return;
+      if (trigger && trigger !== "post_search") return;
+
+      if (delayedOpenRef.current !== null) {
+        globalThis.clearTimeout(delayedOpenRef.current);
+      }
 
       delayedOpenRef.current = globalThis.setTimeout(() => {
         setVisible(true);
       }, 3000);
     } catch {
       // Silencioso por requisito.
+    } finally {
+      checkingRef.current = false;
     }
-  }, []);
+  }, [visible]);
 
   useEffect(() => {
     const onSearchCompleted: EventListener = (event: Event) => {
-      const detail = (event as CustomEvent<{ mentionsCount?: number }>).detail;
-      if ((detail?.mentionsCount ?? 0) <= 0) return;
-      void checkAndOpenNps();
+      const detail = (event as CustomEvent<{ searchId?: string; mentionsCount?: number; total?: number }>).detail;
+      if (!detail?.searchId) return;
+      checkAndOpenNps().catch(() => undefined);
     };
 
     globalThis.addEventListener(SEARCH_COMPLETED_EVENT, onSearchCompleted);
@@ -72,11 +100,14 @@ export default function NpsModal() {
         session_id: sessionId,
         score,
         comment: comment.trim() || undefined,
+        module_key: "search",
+        route: currentRoutePath(),
       });
     } catch {
       // Silencioso por requisito.
     } finally {
       markNpsAsHandled();
+      sessionStorage.removeItem(NPS_SESSION_ID_KEY);
       setVisible(false);
       setSending(false);
     }
@@ -87,6 +118,8 @@ export default function NpsModal() {
       try {
         await sentimentApi.npsDismiss({
           session_id: sessionId,
+          module_key: "search",
+          route: currentRoutePath(),
         });
       } catch {
         // Silencioso por requisito.
@@ -94,9 +127,11 @@ export default function NpsModal() {
     }
 
     markNpsAsHandled();
+    sessionStorage.removeItem(NPS_SESSION_ID_KEY);
     setVisible(false);
   }
 
+  if (!NPS_ENABLED) return null;
   if (!visible) return null;
 
   return (

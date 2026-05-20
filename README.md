@@ -150,13 +150,13 @@ Descrição das principais variáveis:
 | Script | Finalidade |
 | --- | --- |
 | npm run dev | Executa frontend em modo desenvolvimento |
+| npm run preview | Sobe o build local para validacao pre-deploy |
+| npm run start | Alias de preview para ambiente de runtime estatico |
 | npm run build | Gera build de produção |
 | npm run check | Verifica tipos TypeScript sem emitir arquivos |
 | npm run type-check | Alias de check |
 | npm run test | Executa testes (Vitest) |
 | npm run format | Formata código com Prettier |
-
-Observação: existem scripts legados no package.json, mas para o fluxo atual de frontend use principalmente dev, build, check e test.
 
 ## Estrutura do Projeto
 
@@ -235,7 +235,7 @@ Passos:
 
 1. Conectar o repositório no Netlify
 2. Definir Node 20 (quando necessário)
-3. Configurar variável VITE_API_URL no ambiente de deploy
+3. Configurar variável `VITE_API_URL` apontando para o backend em hostingguru.io (ex.: `https://api.seu-dominio.com`)
 4. Publicar
 
 ### Outros provedores estáticos

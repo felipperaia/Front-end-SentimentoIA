@@ -74,7 +74,7 @@ function RouteLoadingFallback() {
   );
 }
 
-function AppErrorFallback({ error }: Readonly<{ error: Error | null }>) {
+function AppErrorFallback({ error: _error }: Readonly<{ error: Error | null }>) {
   const { t } = useAppSettings();
 
   return (
@@ -82,11 +82,6 @@ function AppErrorFallback({ error }: Readonly<{ error: Error | null }>) {
       <div className="app-panel flex w-full max-w-2xl flex-col items-center p-8 text-center">
         <AlertTriangle size={48} className="mb-6 text-destructive" />
         <h2 className="mb-4 text-xl font-semibold">{t("errorBoundary.title")}</h2>
-        {error?.stack ? (
-          <div className="mb-6 max-h-72 w-full overflow-auto rounded-md bg-muted p-4 text-left">
-            <pre className="whitespace-break-spaces text-sm text-muted-foreground">{error.stack}</pre>
-          </div>
-        ) : null}
         <button onClick={() => globalThis.location.reload()} className="primary-btn">
           <RotateCcw size={16} />
           {t("errorBoundary.reload")}

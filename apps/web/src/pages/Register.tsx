@@ -31,7 +31,6 @@ export default function Register() {
     const nextErrors: Record<string, string> = {};
     if (!formData.name.trim()) nextErrors.name = t("auth.nameRequired");
     if (!formData.email.includes("@")) nextErrors.email = t("auth.emailInvalid");
-    if (!formData.phone.trim()) nextErrors.phone = t("auth.phoneRequired");
     if (formData.password.length < 8) nextErrors.password = t("auth.passwordMin");
     if (formData.password !== formData.confirmPassword) {
       nextErrors.confirmPassword = t("auth.passwordMismatch");
@@ -49,7 +48,7 @@ export default function Register() {
       const response = await authApi.register({
         name: formData.name,
         email: formData.email,
-        phone: formData.phone,
+        phone: formData.phone.trim() || undefined,
         password: formData.password,
       });
       setAuthSession(response.access_token, response.user);
@@ -186,7 +185,7 @@ function FormInput({
   type = "text",
   autoComplete,
   error,
-}: FormInputProps) {
+}: Readonly<FormInputProps>) {
   return (
     <div>
       <label className="field-label" htmlFor={id}>

@@ -12,6 +12,10 @@ type ThreadOption = {
 
 const CHAT_ENABLED = String(import.meta.env.VITE_ENABLE_CHAT ?? "true") !== "false";
 
+function ignoreAsync(promise: Promise<unknown>) {
+  promise.catch(() => undefined);
+}
+
 function normalizeMessageRole(role: ChatMessage["role"]): Message["role"] {
   if (role === "assistant") return "assistant";
   if (role === "system") return "system";
@@ -19,17 +23,22 @@ function normalizeMessageRole(role: ChatMessage["role"]): Message["role"] {
 }
 
 function mapMessages(items: ChatMessage[]): Message[] {
-  return items.map((item) => ({
-    role: normalizeMessageRole(item.role),
-    content: item.content,
-  }));
+  return items
+    .filter((item) => Boolean(item?.id || item?.message_id))
+    .map((item) => ({
+      id: item.message_id || item.id,
+      role: normalizeMessageRole(item.role),
+      content: item.content || "",
+    }));
 }
 
 function normalizeThreadOptions(items: ChatThread[], fallbackLabel: string): ThreadOption[] {
-  return items.map((thread) => ({
-    id: thread.thread_id || thread.id,
-    label: thread.title || fallbackLabel,
-  }));
+  return items
+    .map((thread) => ({
+      id: thread.thread_id || thread.id,
+      label: thread.title || fallbackLabel,
+    }))
+    .filter((thread) => Boolean(thread.id));
 }
 
 export function DomainChatWidget() { // NOSONAR
@@ -63,6 +72,12 @@ export function DomainChatWidget() { // NOSONAR
   }, [t]);
 
   const loadMessages = useCallback(async (threadId: string) => {
+    if (!threadId) {
+      setBackendMessages([]);
+      setMessages([]);
+      return;
+    }
+
     const response = await sentimentApi.listChatMessages(threadId, 120);
     const items = response.items || [];
     setBackendMessages(items);
@@ -85,7 +100,7 @@ export function DomainChatWidget() { // NOSONAR
 
   useEffect(() => {
     if (!open) return;
-    void bootstrap();
+    ignoreAsync(bootstrap());
   }, [open, bootstrap]);
 
   const handleSendMessage = useCallback(
@@ -102,6 +117,9 @@ export function DomainChatWidget() { // NOSONAR
         const response = await sentimentApi.sendChatMessage(activeThreadId, trimmed);
 
         const threadId = response.thread?.thread_id || response.thread?.id;
+        const hasCompletePayload = Boolean(response.user_message?.id || response.user_message?.message_id) &&
+          Boolean(response.assistant_message?.id || response.assistant_message?.message_id);
+
         if (threadId) {
           const title = response.thread?.title || t("chat.threadFallback");
           setThreadOptions((current) => {
@@ -110,6 +128,8 @@ export function DomainChatWidget() { // NOSONAR
           });
           setActiveThreadId(threadId);
           await loadMessages(threadId);
+        } else if (hasCompletePayload) {
+          await loadMessages(activeThreadId);
         } else {
           await loadMessages(activeThreadId);
         }
@@ -123,6 +143,7 @@ export function DomainChatWidget() { // NOSONAR
   );
 
   async function handleThreadChange(nextThreadId: string) {
+    if (!nextThreadId) return;
     setActiveThreadId(nextThreadId);
     setError("");
     setBooting(true);
@@ -237,7 +258,9 @@ export function DomainChatWidget() { // NOSONAR
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => void bootstrap()}
+                onClick={() => {
+                  ignoreAsync(bootstrap());
+                }}
                 className="icon-btn"
                 title={t("chat.refreshContext")}
                 aria-label={t("chat.refreshContext")}
@@ -260,7 +283,9 @@ export function DomainChatWidget() { // NOSONAR
             <select
               className="field-input h-9 py-1 text-sm"
               value={activeThreadId || ""}
-              onChange={(event) => void handleThreadChange(event.target.value)}
+              onChange={(event) => {
+                ignoreAsync(handleThreadChange(event.target.value));
+              }}
               disabled={booting || sending || threadOptions.length === 0}
               aria-label={settings.locale === "en-US" ? "Select conversation" : "Selecionar conversa"}
             >
@@ -272,7 +297,9 @@ export function DomainChatWidget() { // NOSONAR
             </select>
             <button
               type="button"
-              onClick={() => void handleCreateThread()}
+              onClick={() => {
+                ignoreAsync(handleCreateThread());
+              }}
               className="icon-btn"
               title={t("chat.newConversation")}
               aria-label={t("chat.newConversation")}
@@ -281,7 +308,9 @@ export function DomainChatWidget() { // NOSONAR
             </button>
             <button
               type="button"
-              onClick={() => void handleDeleteLastMessage()}
+              onClick={() => {
+                ignoreAsync(handleDeleteLastMessage());
+              }}
               className="icon-btn"
               title={settings.locale === "en-US" ? "Delete last message" : "Apagar ultima mensagem"}
               aria-label={settings.locale === "en-US" ? "Delete last message" : "Apagar ultima mensagem"}
@@ -291,7 +320,9 @@ export function DomainChatWidget() { // NOSONAR
             </button>
             <button
               type="button"
-              onClick={() => void handleDeleteThread()}
+              onClick={() => {
+                ignoreAsync(handleDeleteThread());
+              }}
               className="icon-btn text-rose-600"
               title={settings.locale === "en-US" ? "Delete conversation" : "Apagar conversa"}
               aria-label={settings.locale === "en-US" ? "Delete conversation" : "Apagar conversa"}
@@ -304,7 +335,12 @@ export function DomainChatWidget() { // NOSONAR
           {error ? (
             <div className="border-b border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
               <div className="mb-2">{error}</div>
-              <button className="secondary-btn h-8 px-3 py-1 text-xs" onClick={() => void bootstrap()}>
+              <button
+                className="secondary-btn h-8 px-3 py-1 text-xs"
+                onClick={() => {
+                  ignoreAsync(bootstrap());
+                }}
+              >
                 {settings.locale === "en-US" ? "Retry" : "Tentar novamente"}
               </button>
             </div>
@@ -312,7 +348,9 @@ export function DomainChatWidget() { // NOSONAR
 
           <AIChatBox
             messages={messages}
-            onSendMessage={(value) => void handleSendMessage(value)}
+            onSendMessage={(value) => {
+              ignoreAsync(handleSendMessage(value));
+            }}
             isLoading={booting || sending}
             placeholder={t("chat.placeholder")}
             className="rounded-none border-none shadow-none"

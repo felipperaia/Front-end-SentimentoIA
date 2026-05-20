@@ -30,6 +30,7 @@ import { SourceTierBadge } from "@/components/SourceTierBadge";
 import { getSourceColor, getSourceLabel } from "@/lib/sourceColors";
 
 const COLORS = ["#0f766e", "#ea580c", "#0ea5e9", "#16a34a", "#db2777", "#7c3aed"];
+const LAST_SEARCH_ID_KEY = "sentimentoia_last_search_id";
 
 type SourceChartItem = {
   source: string;
@@ -75,7 +76,17 @@ const STATUS_BANNER_STATES: Record<StatusBannerState["level"], Omit<StatusBanner
 };
 
 function mapRecord(record?: Record<string, number>) {
-  return Object.entries(record ?? {}).map(([name, value]) => ({ name, value }));
+  return Object.entries(record ?? {})
+    .map(([name, value]) => {
+      const normalized = Number(value);
+      return { name, value: Number.isFinite(normalized) ? normalized : 0 };
+    })
+    .filter((item) => item.value > 0);
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function resolveTopThemes(rawThemes: DashboardMetrics["top_themes"] | undefined): string[] {
@@ -114,6 +125,25 @@ function groupMentionsBySource(mentions: Mention[]): SourceChartItem[] {
       percentage: (value / total) * 100,
       color: getSourceColor(source),
     }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function groupSourceDistribution(distribution?: Record<string, number>): SourceChartItem[] {
+  const entries = Object.entries(distribution ?? {}).filter(([, value]) => toFiniteNumber(value, 0) > 0);
+  const total = Math.max(1, entries.reduce((acc, [, value]) => acc + toFiniteNumber(value, 0), 0));
+
+  return entries
+    .map(([source, value]) => {
+      const normalized = normalizeSource(source) || "web";
+      const normalizedValue = toFiniteNumber(value, 0);
+      return {
+        source: normalized,
+        label: getSourceLabel(normalized),
+        value: normalizedValue,
+        percentage: (normalizedValue / total) * 100,
+        color: getSourceColor(normalized),
+      };
+    })
     .sort((a, b) => b.value - a.value);
 }
 
@@ -205,6 +235,9 @@ export default function Dashboard() {
     try {
       const dashboardData = await sentimentApi.dashboard();
       setData(dashboardData);
+      if (dashboardData.search_id) {
+        localStorage.setItem(LAST_SEARCH_ID_KEY, dashboardData.search_id);
+      }
 
       const [mentionsData, npsData] = await Promise.all([
         sentimentApi
@@ -216,7 +249,12 @@ export default function Dashboard() {
         sentimentApi.npsMetrics().catch(() => null),
       ]);
 
-      setSourceData(groupMentionsBySource(mentionsData.length ? mentionsData : dashboardData.mentions ?? []));
+      const mentionSourceData = groupMentionsBySource(mentionsData.length ? mentionsData : dashboardData.mentions ?? []);
+      const distributionSourceData = groupSourceDistribution(
+        dashboardData.metrics?.source_distribution ?? dashboardData.metrics?.sources_distribution
+      );
+
+      setSourceData(mentionSourceData.length > 0 ? mentionSourceData : distributionSourceData);
       setNpsMetrics(npsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.error"));
@@ -241,16 +279,18 @@ export default function Dashboard() {
     [metrics.top_aspects]
   );
 
-  const totalMentions = Math.max(0, metrics.total_mentions ?? mentions.length);
-  const sentimentScore = Math.round(metrics.sentiment_score ?? metrics.reputation_score ?? 0);
-  const reputationScore = Math.round(metrics.reputation_score ?? sentimentScore);
-  const criticalMentions = metrics.critical_mentions ?? 0;
+  const totalMentions = Math.max(0, Math.round(toFiniteNumber(metrics.total_mentions, mentions.length)));
+  const sentimentScore = Math.round(toFiniteNumber(metrics.sentiment_score, metrics.reputation_score ?? 0));
+  const reputationScore = Math.round(toFiniteNumber(metrics.reputation_score, sentimentScore));
+  const criticalMentions = Math.max(0, Math.round(toFiniteNumber(metrics.critical_mentions, 0)));
   const topThemes = useMemo(
     () => resolveTopThemes(metrics.top_themes),
     [metrics.top_themes]
   );
   const averageUrgency = useMemo(() => {
-    if (typeof metrics.urgency_score === "number") return metrics.urgency_score;
+    if (typeof metrics.urgency_score === "number") {
+      return metrics.urgency_score <= 1 ? metrics.urgency_score * 100 : metrics.urgency_score;
+    }
 
     const urgencyScores = mentions
       .map((mention) => mention.urgency_score)
@@ -260,12 +300,15 @@ export default function Dashboard() {
       return urgencyScores.reduce((acc, current) => acc + current, 0) / urgencyScores.length;
     }
 
-    const fallback = Number(metrics.average_urgency ?? 0);
+    const fallback = toFiniteNumber(metrics.average_urgency, 0);
     if (!Number.isFinite(fallback)) return 0;
     return fallback <= 1 ? fallback * 100 : fallback;
   }, [mentions, metrics.average_urgency, metrics.urgency_score]);
 
-  const totalComments = Math.max(1, metrics.total_comments ?? metrics.total_mentions ?? mentions.length);
+  const totalComments = Math.max(
+    1,
+    Math.round(toFiniteNumber(metrics.total_comments, toFiniteNumber(metrics.total_mentions, mentions.length)))
+  );
   const negativeCount = resolveNegativeCount(metrics, mentions);
   const negativeRatio = negativeCount / totalComments;
   const statusBanner = resolveStatusBanner(sentimentScore, negativeRatio);
@@ -349,18 +392,22 @@ export default function Dashboard() {
           <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
             <article className="app-panel p-5 md:p-6">
               <h2 className="panel-title">{t("dashboard.sentiments")}</h2>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={sentimentData} dataKey="value" nameKey="name" outerRadius={102} label>
-                      {sentimentData.map((entry, index) => (
-                        <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+              {sentimentData.length === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">Sem dados de sentimento para exibir.</p>
+              ) : (
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={sentimentData} dataKey="value" nameKey="name" outerRadius={102} label>
+                        {sentimentData.map((entry, index) => (
+                          <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </article>
 
             <article className="app-panel p-5 md:p-6">
