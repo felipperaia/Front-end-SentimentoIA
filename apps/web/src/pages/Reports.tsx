@@ -1,30 +1,57 @@
 import { AppShell } from "@/components/AppShell";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { downloadInsightsReport, downloadReport } from "@/lib/api";
+import { downloadInsightsReport, downloadReport, sentimentApi } from "@/lib/api";
 import { Download, FileText, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 type ExportAction = "csv" | "pdf" | "insights-markdown" | "insights-pdf";
+const LAST_SEARCH_ID_KEY = "sentimentoia_last_search_id";
 
 export default function ReportsPage() {
   const { t } = useAppSettings();
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [resolutionFilter, setResolutionFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
   const [limit, setLimit] = useState(100);
+  const [searchId, setSearchId] = useState("");
   const [activeExport, setActiveExport] = useState<ExportAction | null>(null);
   const [lastFailedExport, setLastFailedExport] = useState<ExportAction | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const lastStoredSearchId = localStorage.getItem(LAST_SEARCH_ID_KEY) || "";
+    if (lastStoredSearchId) {
+      setSearchId(lastStoredSearchId);
+    }
+
+    async function loadLatestSearchIdFromBackend() {
+      if (lastStoredSearchId) return;
+      try {
+        const history = await sentimentApi.searchHistory(1);
+        if (!active) return;
+        const latest = history.history?.[0]?.search_id || "";
+        if (latest) {
+          setSearchId(latest);
+          localStorage.setItem(LAST_SEARCH_ID_KEY, latest);
+        }
+      } catch {
+        // Mantem sem filtro explicito caso historico nao esteja disponivel.
+      }
+    }
+
+    void loadLatestSearchIdFromBackend();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const existingInsightExportParams = {
     priority: priorityFilter === "all" ? undefined : priorityFilter,
     resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
     limit,
   };
-  const insightExportParams =
-    sourceFilter === "all"
-      ? existingInsightExportParams
-      : { ...existingInsightExportParams, source: sourceFilter };
+  const insightExportParams = existingInsightExportParams;
 
   async function handleDownload(format: "csv" | "pdf") {
     const action = format;
@@ -32,13 +59,8 @@ export default function ReportsPage() {
     setLastFailedExport(null);
 
     try {
-      const source = sourceFilter === "all" ? undefined : sourceFilter;
-      const dateTag = new Date().toISOString().slice(0, 10);
-      const filename =
-        format === "csv" && source
-          ? `relatorio-${source}-${dateTag}.csv`
-          : undefined;
-      await downloadReport(format, { source, filename });
+      const filename = searchId ? `relatorio-${searchId}.${format}` : undefined;
+      await downloadReport(format, { filename, search_id: searchId || undefined });
     } catch (err) {
       setLastFailedExport(action);
       toast.error(err instanceof Error ? err.message : t("reports.error"));
@@ -95,24 +117,16 @@ export default function ReportsPage() {
             Os filtros abaixo valem para os botões de exportacao de insights em Markdown e PDF.
           </p>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <label className="flex items-center gap-2">
-              <span className="text-muted-foreground">Fonte:</span>
-              <select
-                className="field-input h-9 py-1"
-                value={sourceFilter}
-                onChange={(event) => setSourceFilter(event.target.value)}
-              >
-                <option value="all">Todas as fontes</option>
-                <option value="reddit">reddit</option>
-                <option value="youtube">youtube</option>
-                <option value="appstore">appstore</option>
-                <option value="googleplay">googleplay</option>
-                <option value="glassdoor">glassdoor</option>
-                <option value="trustpilot">trustpilot</option>
-              </select>
-            </label>
+          <div className="mt-4 rounded-xl border border-border/70 bg-background/70 p-3 text-sm">
+            <p>
+              <span className="text-muted-foreground">Search ID ativo:</span> {searchId || "ultimo disponivel no backend"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Exportacao CSV/PDF usa este Search ID quando disponivel; sem ele, o backend exporta a ultima busca concluida.
+            </p>
+          </div>
 
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
             <label className="flex items-center gap-2">
               <span className="text-muted-foreground">Prioridade:</span>
               <select

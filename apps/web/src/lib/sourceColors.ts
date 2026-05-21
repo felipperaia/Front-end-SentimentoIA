@@ -15,6 +15,9 @@ export const SOURCE_COLORS: Record<string, string> = {
   reclameaqui: "#E8232A",
   mastodon: "#6364FF",
   web: "#6B7280",
+  google: "#1A73E8",
+  x: "#111111",
+  twitter: "#1D9BF0",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -28,6 +31,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   reclameaqui: "Reclame Aqui",
   mastodon: "Mastodon",
   web: "Web (Mar Aberto)",
+  google: "Google",
+  x: "X",
+  twitter: "Twitter",
 };
 
 export function getSourceColor(source: string): string {

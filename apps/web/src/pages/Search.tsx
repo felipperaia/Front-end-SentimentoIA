@@ -1,23 +1,92 @@
 import { AppShell } from "@/components/AppShell";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { sentimentApi, type Mention, type ScrapeSource, type SearchResponse } from "@/lib/api";
+import {
+  sentimentApi,
+  type Mention,
+  type ScrapeItem,
+  type ScrapeResponse,
+  type ScrapeSource,
+  type SearchResponse,
+} from "@/lib/api";
+import { getSourceLabel } from "@/lib/sourceColors";
 import { AlertTriangle, Loader2, Search, WandSparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
 const SEARCH_COMPLETED_EVENT = "sentimentoia:search-completed";
+const LAST_SEARCH_ID_KEY = "sentimentoia_last_search_id";
 
-function normalizeSource(source: string): ScrapeSource | null {
+type SourceOption = {
+  id: ScrapeSource;
+  name: string;
+  icon: string;
+};
+
+const FALLBACK_SOURCE_OPTIONS: SourceOption[] = [
+  { id: "reddit", name: getSourceLabel("reddit"), icon: "R" },
+  { id: "youtube", name: getSourceLabel("youtube"), icon: "Y" },
+  { id: "appstore", name: getSourceLabel("appstore"), icon: "A" },
+  { id: "playstore", name: getSourceLabel("playstore"), icon: "P" },
+  { id: "trustpilot", name: getSourceLabel("trustpilot"), icon: "T" },
+  { id: "glassdoor", name: getSourceLabel("glassdoor"), icon: "G" },
+  { id: "reclameaqui", name: getSourceLabel("reclameaqui"), icon: "RA" },
+  { id: "mastodon", name: getSourceLabel("mastodon"), icon: "M" },
+  { id: "web", name: getSourceLabel("web"), icon: "W" },
+];
+
+const SOURCE_TYPE_GUARD: Record<ScrapeSource, true> = {
+  reclameaqui: true,
+  reddit: true,
+  youtube: true,
+  appstore: true,
+  playstore: true,
+  glassdoor: true,
+  trustpilot: true,
+  mastodon: true,
+  web: true,
+  google: true,
+  x: true,
+  twitter: true,
+};
+
+function asScrapeSource(source: string): ScrapeSource | null {
   const normalized = String(source || "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "");
+    .replace(/\s+/g, "") as ScrapeSource;
 
-  if (normalized.includes("reclameaqui")) return "reclameaqui";
-  if (normalized.includes("reddit")) return "reddit";
-  if (normalized.includes("web")) return "web";
+  if (SOURCE_TYPE_GUARD[normalized]) {
+    return normalized;
+  }
+
   return null;
+}
+
+function iconFromSourceName(name: string): string {
+  const normalized = String(name || "").trim().toUpperCase();
+  if (normalized.startsWith("RECLAME")) return "RA";
+  return normalized.slice(0, 1) || "?";
+}
+
+function resolveSelectedSources(current: ScrapeSource[], dynamicOptions: SourceOption[]): ScrapeSource[] {
+  const dynamicSourceIds = new Set(dynamicOptions.map((item) => item.id));
+  const validCurrent = current.filter((source) => dynamicSourceIds.has(source));
+
+  if (validCurrent.length > 0) {
+    return validCurrent;
+  }
+
+  return dynamicOptions.slice(0, 3).map((item) => item.id);
+}
+
+function normalizeSource(source: string): ScrapeSource | null {
+  return asScrapeSource(
+    String(source || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+  );
 }
 
 function mentionTitle(mention: Mention): string {
@@ -26,38 +95,121 @@ function mentionTitle(mention: Mention): string {
   return mention.source || "Menção";
 }
 
+function scrapeItemTitle(item: ScrapeItem): string {
+  if (item.title) return item.title;
+  if (item.author) return item.author;
+  return item.url || "Resultado";
+}
+
+function searchStatusLabel(status: SearchResponse["status"] | undefined): string {
+  if (status === "partial_success") return "Parcial";
+  if (status === "failed") return "Falhou";
+  if (status === "empty") return "Sem resultados";
+  return "Concluida";
+}
+
+function searchStatusClass(status: SearchResponse["status"] | undefined): string {
+  if (status === "partial_success") return "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200";
+  if (status === "failed") return "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200";
+  if (status === "empty") return "border-slate-300 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-900/20 dark:text-slate-200";
+  return "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200";
+}
+
 export default function SearchPage() {
   const { t } = useAppSettings();
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
-  const [selectedSources, setSelectedSources] = useState<ScrapeSource[]>(["reclameaqui", "reddit", "web"]);
+  const [sourceOptions, setSourceOptions] = useState<SourceOption[]>(FALLBACK_SOURCE_OPTIONS);
+  const [selectedSources, setSelectedSources] = useState<ScrapeSource[]>(
+    FALLBACK_SOURCE_OPTIONS.slice(0, 3).map((item) => item.id)
+  );
   const [limitPerSource, setLimitPerSource] = useState(5);
+  const [periodDays, setPeriodDays] = useState(30);
+  const [locality, setLocality] = useState("");
+  const [replaceExisting, setReplaceExisting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<SearchResponse | null>(null);
+  const [lastScrape, setLastScrape] = useState<ScrapeResponse | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadSourceOptions() {
+      try {
+        const status = await sentimentApi.integrationsStatus();
+        if (!active) return;
+
+        const activeMetadata = (status.scraper_source_metadata || [])
+          .filter((item) => item.active)
+          .sort((a, b) => b.priority - a.priority);
+
+        if (activeMetadata.length === 0) {
+          return;
+        }
+
+        const dynamicOptions: SourceOption[] = activeMetadata
+          .map((item) => {
+            const sourceId = asScrapeSource(item.name);
+            if (!sourceId) return null;
+            return {
+              id: sourceId,
+              name: getSourceLabel(sourceId),
+              icon: iconFromSourceName(item.name),
+            };
+          })
+          .filter((item): item is SourceOption => item !== null);
+
+        if (dynamicOptions.length > 0) {
+          setSourceOptions(dynamicOptions);
+          setSelectedSources((current) => resolveSelectedSources(current, dynamicOptions));
+        }
+      } catch {
+        // Mantem fallback local quando endpoint de integracoes estiver indisponivel.
+      }
+    }
+
+    void loadSourceOptions();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const groupedMentions = useMemo(() => {
-    const groups: Record<ScrapeSource, Mention[]> = {
-      reclameaqui: [],
-      reddit: [],
-      web: [],
-    };
+    const groups: Record<string, Mention[]> = {};
 
     for (const mention of lastResult?.mentions ?? []) {
       const source = normalizeSource(mention.source);
       if (!source) continue;
+      if (!groups[source]) {
+        groups[source] = [];
+      }
       groups[source].push(mention);
     }
 
     return groups;
   }, [lastResult?.mentions]);
 
-  const searchErrors = lastResult?.errors ?? [];
+  const groupedScrape = useMemo(() => {
+    const groups: Record<string, ScrapeItem[]> = {};
+    const payload = lastScrape?.results || {};
 
-  const sources: Array<{ id: ScrapeSource; name: string; icon: string }> = [
-    { id: "reclameaqui", name: "Reclame Aqui", icon: "RA" },
-    { id: "reddit", name: "Reddit", icon: "R" },
-    { id: "web", name: "Web Aberto", icon: "W" },
-  ];
+    for (const [source, items] of Object.entries(payload)) {
+      const normalized = normalizeSource(source);
+      if (!normalized) continue;
+      groups[normalized] = Array.isArray(items) ? items : [];
+    }
+
+    return groups;
+  }, [lastScrape?.results]);
+
+  const searchErrors = [...(lastScrape?.errors ?? []), ...(lastResult?.errors ?? [])];
+  const effectiveStatus: SearchResponse["status"] | undefined = lastResult?.status || lastScrape?.status;
+  const effectiveStatusSummary = lastResult?.status_summary || lastScrape?.status_summary;
+  const effectiveTotal = lastResult?.total ?? lastScrape?.total ?? 0;
+  const hasRunData = Boolean(lastResult || lastScrape);
+
+  const sources = sourceOptions;
 
   const toggleSource = (sourceId: ScrapeSource) => {
     setSelectedSources((prev) =>
@@ -78,23 +230,55 @@ export default function SearchPage() {
     setLoading(true);
 
     try {
-      const result = await sentimentApi.search({
-        brand_name: query,
-        sources: selectedSources,
-      });
+      const [scrapeResult, searchResult] = await Promise.allSettled([
+        sentimentApi.scrape({
+          query,
+          sources: selectedSources,
+          limit_per_source: limitPerSource,
+        }),
+        sentimentApi.search({
+          brand_name: query,
+          sources: selectedSources,
+          period_days: periodDays,
+          locality: locality.trim() || undefined,
+          replace_existing: replaceExisting,
+        }),
+      ]);
+
+      if (scrapeResult.status === "fulfilled") {
+        setLastScrape(scrapeResult.value);
+      } else {
+        setLastScrape(null);
+      }
+
+      if (searchResult.status !== "fulfilled") {
+        throw searchResult.reason;
+      }
+
+      const result = searchResult.value;
 
       setLastResult(result);
+      localStorage.setItem(LAST_SEARCH_ID_KEY, result.search_id);
       const mentionsCount = result.mentions?.length ?? 0;
+      const total = result.total ?? mentionsCount;
 
-      if (mentionsCount > 0 && globalThis.window !== undefined) {
+      if (globalThis.window !== undefined) {
         globalThis.window.dispatchEvent(
           new CustomEvent(SEARCH_COMPLETED_EVENT, {
-            detail: { mentionsCount },
+            detail: {
+              searchId: result.search_id,
+              mentionsCount,
+              total,
+            },
           })
         );
       }
 
-      if ((result.total ?? mentionsCount) === 0) {
+      if (result.status === "partial_success") {
+        toast.warning(result.status_summary?.message || "Busca concluida com falhas parciais em algumas fontes.");
+      } else if (result.status === "failed") {
+        toast.error(result.status_summary?.message || "Busca concluida sem resultados devido a falhas nas fontes selecionadas.");
+      } else if (total === 0) {
         toast.warning(t("search.emptyResult"));
       }
     } catch (err) {
@@ -139,9 +323,45 @@ export default function SearchPage() {
             <p className="mt-3 text-sm text-muted-foreground">
               {t("search.brandHelp")}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {t("search.scrapingMode")}
-            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="field-label" htmlFor="search-period-days">Janela (dias)</label>
+                <input
+                  id="search-period-days"
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={periodDays}
+                  onChange={(event) => setPeriodDays(Math.max(1, Math.min(365, Number(event.target.value || 30))))}
+                  className="field-input"
+                  disabled={loading}
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="search-locality">Localidade (opcional)</label>
+                <input
+                  id="search-locality"
+                  type="text"
+                  value={locality}
+                  onChange={(event) => setLocality(event.target.value)}
+                  placeholder="Brasil, Sao Paulo, etc"
+                  className="field-input"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <label className="mt-4 inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={replaceExisting}
+                onChange={(event) => setReplaceExisting(event.target.checked)}
+                disabled={loading}
+              />
+              <span>Forcar nova coleta (sem cache)</span>
+            </label>
+
+            <p className="mt-2 text-xs text-muted-foreground">{t("search.scrapingMode")}</p>
           </article>
 
           <article className="app-panel p-6 md:p-7">
@@ -188,45 +408,65 @@ export default function SearchPage() {
             </article>
           ) : null}
 
-          {lastResult ? (
+          {hasRunData ? (
             <article className="app-panel p-6 md:p-7">
               <h3 className="text-lg font-semibold">{t("search.resultsBySource")}</h3>
               <div className="mt-4 space-y-4">
                 {sources.map((source) => {
-                  const items = groupedMentions[source.id] || [];
-                  const visibleItems = items.slice(0, limitPerSource);
+                  const mentionItems = groupedMentions[source.id] || [];
+                  const scrapeItems = groupedScrape[source.id] || [];
+                  const visibleMentions = mentionItems.slice(0, limitPerSource);
+                  const visibleScrapeItems = scrapeItems.slice(0, limitPerSource);
+                  const totalBySource = scrapeItems.length > 0 ? scrapeItems.length : mentionItems.length;
+                  const renderItems =
+                    visibleScrapeItems.length > 0
+                      ? visibleScrapeItems.map((item, index) => (
+                          <li key={`${source.id}-scrape-${index}`} className="rounded-lg border border-border/70 bg-background p-3">
+                            {item.url ? (
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-semibold text-[color:var(--brand-strong)] hover:underline"
+                              >
+                                {scrapeItemTitle(item)}
+                              </a>
+                            ) : (
+                              <p className="text-sm font-semibold text-[color:var(--brand-strong)]">{scrapeItemTitle(item)}</p>
+                            )}
+                            {item.snippet ? <p className="mt-1 text-sm text-muted-foreground">{item.snippet}</p> : null}
+                          </li>
+                        ))
+                      : visibleMentions.map((item, index) => (
+                          <li key={`${source.id}-mention-${index}`} className="rounded-lg border border-border/70 bg-background p-3">
+                            {item.url ? (
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-semibold text-[color:var(--brand-strong)] hover:underline"
+                              >
+                                {mentionTitle(item)}
+                              </a>
+                            ) : (
+                              <p className="text-sm font-semibold text-[color:var(--brand-strong)]">{mentionTitle(item)}</p>
+                            )}
+                            {item.text ? <p className="mt-1 text-sm text-muted-foreground">{item.text}</p> : null}
+                          </li>
+                        ));
+
                   return (
                     <section key={source.id} className="rounded-xl border border-border/80 p-4">
                       <header className="mb-3 flex items-center justify-between gap-3">
                         <h4 className="text-sm font-semibold">{source.name}</h4>
                         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                          {items.length}
+                          {totalBySource}
                         </span>
                       </header>
-                      {visibleItems.length === 0 ? (
+                      {visibleScrapeItems.length === 0 && visibleMentions.length === 0 ? (
                         <p className="text-sm text-muted-foreground">{t("search.noSourceResults")}</p>
                       ) : (
-                        <ul className="space-y-3">
-                          {visibleItems.map((item, index) => (
-                            <li key={`${source.id}-${index}`} className="rounded-lg border border-border/70 bg-background p-3">
-                              {item.url ? (
-                                <a
-                                  href={item.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm font-semibold text-[color:var(--brand-strong)] hover:underline"
-                                >
-                                  {mentionTitle(item)}
-                                </a>
-                              ) : (
-                                <p className="text-sm font-semibold text-[color:var(--brand-strong)]">{mentionTitle(item)}</p>
-                              )}
-                              {item.text ? (
-                                <p className="mt-1 text-sm text-muted-foreground">{item.text}</p>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
+                        <ul className="space-y-3">{renderItems}</ul>
                       )}
                     </section>
                   );
@@ -249,6 +489,12 @@ export default function SearchPage() {
               <p>
                 <span className="text-muted-foreground">{t("search.limitPerSource")}:</span> {limitPerSource}
               </p>
+              <p>
+                <span className="text-muted-foreground">Janela:</span> {periodDays} dias
+              </p>
+              <p>
+                <span className="text-muted-foreground">Localidade:</span> {locality || "-"}
+              </p>
             </div>
             <button
               type="submit"
@@ -260,11 +506,18 @@ export default function SearchPage() {
             </button>
           </article>
 
-          {lastResult && (
+          {hasRunData && (
             <article className="app-panel p-6">
               <h3 className="text-lg font-semibold">{t("search.lastRun")}</h3>
               <p className="mt-3 text-sm">
-                {t("search.found")}: <strong>{lastResult.total ?? 0}</strong>
+                {t("search.found")}: <strong>{effectiveTotal}</strong>
+              </p>
+              <div className={`mt-3 rounded-xl border px-3 py-2 text-xs font-medium ${searchStatusClass(effectiveStatus)}`}>
+                Status: {searchStatusLabel(effectiveStatus)}
+                {effectiveStatusSummary?.message ? <span className="ml-1">- {effectiveStatusSummary.message}</span> : null}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Search ID: {lastResult?.search_id || "-"}
               </p>
               {searchErrors.length > 0 ? (
                 <div className="mt-3 space-y-2">
@@ -275,6 +528,16 @@ export default function SearchPage() {
                         ? err
                         : `${err.source || "fonte"}-${err.error || "erro desconhecido"}`;
 
+                    const timeoutHint =
+                      typeof err !== "string" && err.timeout
+                        ? " (timeout)"
+                        : "";
+
+                    const reasonHint =
+                      typeof err !== "string" && err.reason && err.reason !== "timeout"
+                        ? ` (${err.reason})`
+                        : "";
+
                     return (
                     <div key={errorKey} className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
                       <div className="flex items-start gap-2">
@@ -282,7 +545,7 @@ export default function SearchPage() {
                         <span>
                           {typeof err === "string"
                             ? err
-                            : `${err.source || "fonte"}: ${err.error || "erro desconhecido"}`}
+                            : `${err.source || "fonte"}: ${err.error || "erro desconhecido"}${timeoutHint}${reasonHint}`}
                         </span>
                       </div>
                     </div>

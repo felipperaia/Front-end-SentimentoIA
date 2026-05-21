@@ -6,19 +6,13 @@
   "scripts": {
     "dev": "vite",
     "dev:web": "vite",
-    "dev:api": "apps\\api\\venv\\Scripts\\python -m uvicorn app.main:app --reload --port 8000 --app-dir apps/api",
-    "dev:worker": "apps\\api\\venv\\Scripts\\python -m apps.worker.app.worker",
-    "dev:legacy": "cross-env NODE_ENV=development OAUTH_SERVER_URL=http://localhost:3001 VITE_OAUTH_PORTAL_URL=http://localhost:3001 VITE_APP_ID=local-dev VITE_API_URL=http://localhost:8000 VITE_ANALYTICS_ENDPOINT=http://localhost:3001 VITE_ANALYTICS_WEBSITE_ID=local tsx watch legacy/server-node-trpc/server/_core/index.ts",
     "build": "vite build",
-    "build:legacy": "vite build && esbuild legacy/server-node-trpc/server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "npm run start:legacy",
-    "start:legacy": "cross-env NODE_ENV=production node dist/index.js",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "start": "npm run preview",
     "check": "tsc --noEmit",
     "type-check": "tsc --noEmit",
     "format": "prettier --write .",
-    "test": "vitest run",
-    "db:push": "npm run db:push:legacy",
-    "db:push:legacy": "cd legacy/server-node-trpc && drizzle-kit generate --config drizzle.config.ts && drizzle-kit migrate --config drizzle.config.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

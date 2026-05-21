@@ -76,7 +76,7 @@
 
 /// <reference types="@types/google.maps" />
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePersistFn } from "@/hooks/usePersistFn";
 import { cn } from "@/lib/utils";
 
@@ -87,26 +87,45 @@ declare global {
 }
 
 const API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
+const MAPS_ENABLED = String(import.meta.env.VITE_ENABLE_MAP || "false") === "true";
 const FORGE_BASE_URL =
   import.meta.env.VITE_FRONTEND_FORGE_API_URL ||
   "https://forge.butterfly-effect.dev";
 const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
 
+let scriptPromise: Promise<boolean> | null = null;
+
 function loadMapScript() {
-  return new Promise(resolve => {
+  if (scriptPromise) return scriptPromise;
+
+  scriptPromise = new Promise<boolean>((resolve) => {
+    if (!MAPS_ENABLED || !API_KEY) {
+      resolve(false);
+      return;
+    }
+
+    if (globalThis.window?.google?.maps) {
+      resolve(true);
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
     script.async = true;
     script.crossOrigin = "anonymous";
     script.onload = () => {
-      resolve(null);
+      resolve(Boolean(globalThis.window?.google?.maps));
       script.remove(); // Clean up immediately
     };
     script.onerror = () => {
       console.error("Failed to load Google Maps script");
+      resolve(false);
+      script.remove();
     };
     document.head.appendChild(script);
   });
+
+  return scriptPromise;
 }
 
 interface MapViewProps {
@@ -121,17 +140,30 @@ export function MapView({
   initialCenter = { lat: 37.7749, lng: -122.4194 },
   initialZoom = 12,
   onMapReady,
-}: MapViewProps) {
+}: Readonly<MapViewProps>) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   const init = usePersistFn(async () => {
-    await loadMapScript();
-    if (!mapContainer.current) {
-      console.error("Map container not found");
+    const scriptReady = await loadMapScript();
+    if (!scriptReady) {
+      setUnavailable(true);
       return;
     }
-    map.current = new window.google.maps.Map(mapContainer.current, {
+
+    if (!mapContainer.current) {
+      console.error("Map container not found");
+      setUnavailable(true);
+      return;
+    }
+
+    if (!globalThis.window?.google?.maps) {
+      setUnavailable(true);
+      return;
+    }
+
+    map.current = new globalThis.window.google.maps.Map(mapContainer.current, {
       zoom: initialZoom,
       center: initialCenter,
       mapTypeControl: true,
@@ -146,8 +178,18 @@ export function MapView({
   });
 
   useEffect(() => {
-    init();
+    init().catch(() => setUnavailable(true));
   }, [init]);
+
+  if (unavailable) {
+    return (
+      <div className={cn("flex h-[500px] w-full items-center justify-center rounded-xl border border-border/70 bg-muted/20", className)}>
+        <p className="px-4 text-center text-sm text-muted-foreground">
+          Mapa indisponivel no ambiente atual.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div ref={mapContainer} className={cn("w-full h-[500px]", className)} />

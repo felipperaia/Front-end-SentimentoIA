@@ -9,7 +9,7 @@ import {
   Trash2,
   Wand2,
 } from "lucide-react";
-import { InsightItem, sentimentApi } from "@/lib/api";
+import { ApiRequestError, InsightItem, sentimentApi } from "@/lib/api";
 
 function resolveInsightId(item: InsightItem): string {
   return item.insight_id || item.id;
@@ -22,10 +22,10 @@ export default function AnalysisPage() {
   const [processing, setProcessing] = useState(false);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [resolutionFilter, setResolutionFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
   const [error, setError] = useState("");
+  const [expectedStateMessage, setExpectedStateMessage] = useState("");
 
   async function loadInsights(include = includeArchived) {
     setLoading(true);
@@ -37,11 +37,17 @@ export default function AnalysisPage() {
         priority: priorityFilter === "all" ? undefined : priorityFilter,
         resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
       };
-      const params = sourceFilter === "all" ? existingParams : { ...existingParams, source: sourceFilter };
-      const response = await sentimentApi.insights(params);
-      setItems(response.items ?? []);
+      const response = await sentimentApi.insights(existingParams);
+      let normalizedItems: InsightItem[] = [];
+      if (Array.isArray(response?.items)) {
+        normalizedItems = response.items;
+      } else if (Array.isArray(response as unknown)) {
+        normalizedItems = response as unknown as InsightItem[];
+      }
+      setItems(normalizedItems);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("analysis.loadError"));
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -49,15 +55,33 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     void loadInsights();
-  }, [includeArchived, sourceFilter, priorityFilter, resolutionFilter]);
+  }, [includeArchived, priorityFilter, resolutionFilter]);
 
   async function handleGenerate() {
     setProcessing(true);
     setError("");
+    setExpectedStateMessage("");
     try {
       await sentimentApi.generateInsight();
       await loadInsights();
     } catch (err) {
+      if (err instanceof ApiRequestError && err.code === "threshold_not_met") {
+        const meta = (err.data?.meta ?? {}) as Record<string, unknown>;
+        const threshold = Number(meta.threshold ?? 0);
+        const processedCount = Number(meta.processed_count ?? 0);
+        const fallbackMessage =
+          threshold > 0
+            ? `Ainda nao ha mencoes suficientes para gerar insight (${processedCount}/${threshold}). Execute mais buscas ou aguarde o processamento.`
+            : "Ainda nao ha mencoes suficientes para gerar insight. Execute mais buscas ou aguarde o processamento.";
+
+        const actionableMessage =
+          typeof meta.actionable_message === "string" && meta.actionable_message.trim().length > 0
+            ? meta.actionable_message
+            : fallbackMessage;
+
+        setExpectedStateMessage(actionableMessage);
+        return;
+      }
       setError(err instanceof Error ? err.message : t("analysis.generateError"));
     } finally {
       setProcessing(false);
@@ -237,23 +261,6 @@ export default function AnalysisPage() {
         </label>
 
         <label className="flex items-center gap-2">
-          <span className="text-muted-foreground">Fonte:</span>
-          <select
-            className="field-input h-9 py-1"
-            value={sourceFilter}
-            onChange={(event) => setSourceFilter(event.target.value)}
-          >
-            <option value="all">Todas as fontes</option>
-            <option value="reddit">reddit</option>
-            <option value="youtube">youtube</option>
-            <option value="appstore">appstore</option>
-            <option value="googleplay">googleplay</option>
-            <option value="glassdoor">glassdoor</option>
-            <option value="trustpilot">trustpilot</option>
-          </select>
-        </label>
-
-        <label className="flex items-center gap-2">
           <span className="text-muted-foreground">Prioridade:</span>
           <select
             className="field-input h-9 py-1"
@@ -283,6 +290,12 @@ export default function AnalysisPage() {
           </select>
         </label>
       </div>
+
+      {expectedStateMessage ? (
+        <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+          {expectedStateMessage}
+        </div>
+      ) : null}
 
       {content}
     </AppShell>

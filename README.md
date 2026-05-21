@@ -95,6 +95,8 @@ No arquivo apps/web/.env, configure:
 VITE_API_URL=http://localhost:8000
 ```
 
+Para deploy, use a URL publica do backend (ex.: `https://api.seudominio.com`) e evite valores `localhost`.
+
 ### 4) Subir o frontend
 
 Com npm:
@@ -125,7 +127,7 @@ Base recomendada:
 
 ```env
 VITE_API_URL=http://localhost:8000
-VITE_API_TIMEOUT_MS=20000
+VITE_API_TIMEOUT_MS=60000
 VITE_API_RETRY_ATTEMPTS=2
 VITE_API_RETRY_DELAY_MS=700
 VITE_ENABLE_CHAT=true
@@ -145,18 +147,22 @@ Descrição das principais variáveis:
 - VITE_ENABLE_PWA: habilita/desabilita registro do service worker
 - VITE_PRIVACY_POLICY_URL: URL da política de privacidade
 
+Observacao:
+
+- o frontend nao possui fallback para localhost; a comunicacao depende explicitamente de `VITE_API_URL`
+
 ## Scripts Disponíveis
 
 | Script | Finalidade |
 | --- | --- |
 | npm run dev | Executa frontend em modo desenvolvimento |
+| npm run preview | Sobe o build local para validacao pre-deploy |
+| npm run start | Alias de preview para ambiente de runtime estatico |
 | npm run build | Gera build de produção |
 | npm run check | Verifica tipos TypeScript sem emitir arquivos |
 | npm run type-check | Alias de check |
 | npm run test | Executa testes (Vitest) |
 | npm run format | Formata código com Prettier |
-
-Observação: existem scripts legados no package.json, mas para o fluxo atual de frontend use principalmente dev, build, check e test.
 
 ## Estrutura do Projeto
 
@@ -207,6 +213,13 @@ Principais rotas utilizadas:
 - NPS: /api/nps/*
 - privacidade: /api/privacy/*
 
+Contratos importantes consumidos pelo frontend:
+
+- `POST /api/search` e `POST /api/scrape` retornam `status` (`success|partial_success|empty|failed`) e `status_summary`
+- `GET /api/mentions` aceita `batch_id`/`search_id` (e aliases camelCase por compatibilidade)
+- `POST /api/insights/generate` pode retornar `400 threshold_not_met` como estado esperado de negocio
+- `POST /api/chat/threads/{thread_id}/messages` pode retornar `503` quando IA estiver indisponivel
+
 ## PWA
 
 Implementação ativa com:
@@ -235,7 +248,7 @@ Passos:
 
 1. Conectar o repositório no Netlify
 2. Definir Node 20 (quando necessário)
-3. Configurar variável VITE_API_URL no ambiente de deploy
+3. Configurar variável `VITE_API_URL` apontando para o backend em hostingguru.io (ex.: `https://api.seu-dominio.com`)
 4. Publicar
 
 ### Outros provedores estáticos

@@ -19,10 +19,12 @@ type MenuItem = {
   icon: LucideIcon;
 };
 
-export function AppShell({ title, subtitle, actions, children }: ShellProps) {
+export function AppShell({ title, subtitle, actions, children }: Readonly<ShellProps>) {
   const [location, setLocation] = useLocation();
   const { logout } = useAuth();
   const { t } = useAppSettings();
+
+  const isActivePath = (path: string) => location === path || location.startsWith(`${path}/`);
 
   const menuItems: MenuItem[] = [
     { path: "/search", label: t("nav.search"), icon: Search },
@@ -43,7 +45,7 @@ export function AppShell({ title, subtitle, actions, children }: ShellProps) {
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
               {menuItems.map((item) => {
-                const active = location === item.path;
+                const active = isActivePath(item.path);
                 return (
                   <button
                     key={item.path}
