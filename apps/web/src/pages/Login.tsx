@@ -51,7 +51,7 @@ export default function Login() {
         return;
       }
 
-      setAuthSession(response.access_token, response.user);
+      setAuthSession(response.access_token, response.user, response.refresh_token);
       setLocation("/search");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.loginError"));

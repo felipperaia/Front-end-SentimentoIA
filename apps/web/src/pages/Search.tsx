@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { MentionCard } from "@/components/MentionCard";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
   sentimentApi,
@@ -87,12 +88,6 @@ function normalizeSource(source: string): ScrapeSource | null {
       .toLowerCase()
       .replace(/\s+/g, "")
   );
-}
-
-function mentionTitle(mention: Mention): string {
-  if (mention.author) return mention.author;
-  if (mention.url) return mention.url;
-  return mention.source || "Menção";
 }
 
 function scrapeItemTitle(item: ScrapeItem): string {
@@ -503,20 +498,8 @@ export default function SearchPage() {
                           </li>
                         ))
                       : visibleMentions.map((item, index) => (
-                          <li key={`${source.id}-mention-${index}`} className="rounded-lg border border-border/70 bg-background p-3">
-                            {item.url ? (
-                              <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-semibold text-[color:var(--brand-strong)] hover:underline"
-                              >
-                                {mentionTitle(item)}
-                              </a>
-                            ) : (
-                              <p className="text-sm font-semibold text-[color:var(--brand-strong)]">{mentionTitle(item)}</p>
-                            )}
-                            {item.text ? <p className="mt-1 text-sm text-muted-foreground">{item.text}</p> : null}
+                          <li key={`${source.id}-mention-${index}`}>
+                            <MentionCard mention={item} />
                           </li>
                         ));
 

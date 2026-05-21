@@ -121,6 +121,10 @@ export const TRANSLATIONS = {
     "pt-BR": "Relatórios",
     "en-US": "Reports",
   },
+  "nav.metrics": {
+    "pt-BR": "Métricas",
+    "en-US": "Metrics",
+  },
   "nav.settings": {
     "pt-BR": "Configurações",
     "en-US": "Settings",
@@ -653,9 +657,93 @@ export const TRANSLATIONS = {
     "pt-BR": "Falhas de fontes",
     "en-US": "Source failures",
   },
+  "mention.urgencyFactors": {
+    "pt-BR": "Fatores de risco detectados",
+    "en-US": "Detected risk factors",
+  },
+  "mention.aspectSentiment": {
+    "pt-BR": "Sentimento por aspecto",
+    "en-US": "Aspect sentiment",
+  },
+  "mention.confidence": {
+    "pt-BR": "Confiança da IA",
+    "en-US": "AI confidence",
+  },
+  "mention.confidenceHigh": {
+    "pt-BR": "Alta confiança",
+    "en-US": "High confidence",
+  },
+  "mention.confidenceMedium": {
+    "pt-BR": "Confiança moderada",
+    "en-US": "Moderate confidence",
+  },
+  "mention.confidenceLow": {
+    "pt-BR": "Baixa confiança — revisar",
+    "en-US": "Low confidence — review",
+  },
+  "urgency.critical": {
+    "pt-BR": "Crítica",
+    "en-US": "Critical",
+  },
+  "urgency.high": {
+    "pt-BR": "Alta",
+    "en-US": "High",
+  },
+  "urgency.medium": {
+    "pt-BR": "Média",
+    "en-US": "Medium",
+  },
+  "urgency.low": {
+    "pt-BR": "Baixa",
+    "en-US": "Low",
+  },
   "dashboard.loading": {
     "pt-BR": "Carregando dashboard...",
     "en-US": "Loading dashboard...",
+  },
+  "metrics.title": {
+    "pt-BR": "Métricas de Classificação",
+    "en-US": "Classification Metrics",
+  },
+  "metrics.period": {
+    "pt-BR": "Período",
+    "en-US": "Period",
+  },
+  "metrics.totalAnalyzed": {
+    "pt-BR": "Total analisado",
+    "en-US": "Total analyzed",
+  },
+  "metrics.avgUrgency": {
+    "pt-BR": "Urgência média",
+    "en-US": "Average urgency",
+  },
+  "metrics.avgConfidence": {
+    "pt-BR": "Confiança do modelo",
+    "en-US": "Model confidence",
+  },
+  "metrics.criticalCount": {
+    "pt-BR": "Menções críticas",
+    "en-US": "Critical mentions",
+  },
+  "metrics.bySentiment": {
+    "pt-BR": "Distribuição de sentimento",
+    "en-US": "Sentiment distribution",
+  },
+  "metrics.byCriticality": {
+    "pt-BR": "Distribuição por criticidade",
+    "en-US": "Criticality distribution",
+  },
+  "metrics.topFactors": {
+    "pt-BR": "Principais fatores de urgência",
+    "en-US": "Top urgency factors",
+  },
+  "metrics.topNegativeAspects": {
+    "pt-BR": "Aspectos mais negativos",
+    "en-US": "Top negative aspects",
+  },
+  "metrics.sourcesCoverage": {
+    "pt-BR": "Cobertura por fonte",
+    "en-US": "Coverage by source",
   },
   "dashboard.subtitleBatch": {
     "pt-BR": "Batch atual: {batchId}",
@@ -820,6 +908,10 @@ export const TRANSLATIONS = {
   "analysis.guidance": {
     "pt-BR": "Direcionamento de decisão",
     "en-US": "Decision guidance",
+  },
+  "analysis.confidenceTooltip": {
+    "pt-BR": "Este score indica a certeza média do modelo ao classificar as menções que geraram este insight.",
+    "en-US": "This score indicates the model's average certainty when classifying mentions that generated this insight.",
   },
   "analysis.noGuidance": {
     "pt-BR": "Sem direcionamento disponível.",

@@ -22,7 +22,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LogOut, PanelLeft, Search, Users } from "lucide-react";
+import { BarChart2, FileText, LogOut, PanelLeft, Search, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -113,6 +113,8 @@ function DashboardLayoutContent({
   const menuItems = [
     { icon: Search, label: t("nav.search"), path: "/search" },
     { icon: Users, label: t("nav.insights"), path: "/analysis" },
+    { icon: BarChart2, label: t("nav.metrics"), path: "/metrics" },
+    { icon: FileText, label: t("nav.reports"), path: "/reports" },
   ];
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();

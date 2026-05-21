@@ -10,6 +10,7 @@ const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS ||
 export const API_BASE_URL = configuredApiBaseUrl;
 export const AUTH_TOKEN_KEY = "sentimentoia_access_token";
 export const AUTH_USER_KEY = "sentimentoia_user";
+const REFRESH_TOKEN_KEY = "sentimentoia_refresh_token";
 const SETTINGS_STORAGE_KEY = "sentimentoia_preferences";
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs)
   ? Math.max(1000, configuredApiTimeoutMs)
@@ -45,6 +46,7 @@ export type AuthUser = {
 
 export type AuthResponse = {
   access_token: string;
+  refresh_token?: string;
   token_type: "bearer";
   user: AuthUser;
 };
@@ -55,6 +57,19 @@ export type MfaChallengeResponse = {
 };
 
 export type LoginResponse = AuthResponse | MfaChallengeResponse;
+
+export type AspectSentimentValue = "positivo" | "negativo" | "neutro" | null;
+
+export type UrgencyTrendPoint = {
+  date: string;
+  avg_score: number;
+  critical_count: number;
+};
+
+export type NamedCount = {
+  name: string;
+  count: number;
+};
 
 export type AppTheme = "light" | "dark";
 export type AppLocale = "pt-BR" | "en-US";
@@ -264,10 +279,6 @@ async function runRequestAttempt(params: {
       signal: controller.signal,
     });
 
-    if (response.status === 401) {
-      clearAuthSession();
-    }
-
     if (!response.ok && shouldRetryStatus(response.status) && params.attempt < API_RETRY_ATTEMPTS) {
       await wait(API_RETRY_DELAY_MS * (params.attempt + 1));
       return { response: null };
@@ -288,7 +299,44 @@ async function runRequestAttempt(params: {
   }
 }
 
-async function requestWithRetry(path: string, options: RequestInit = {}): Promise<Response> {
+async function tryRefreshToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken || !API_BASE_URL) return null;
+
+  try {
+    const signal =
+      typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+        ? AbortSignal.timeout(15_000)
+        : undefined;
+
+    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      signal,
+    });
+
+    if (!response.ok) return null;
+
+    const data = ensureObject(await response.json());
+    const accessToken = asString(data.access_token, "");
+    if (!accessToken) return null;
+
+    const nextRefreshToken = asString(data.refresh_token, "");
+    localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
+    if (nextRefreshToken) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, nextRefreshToken);
+    }
+
+    return accessToken;
+  } catch {
+    return null;
+  }
+}
+
+async function requestWithRetry(path: string, options: RequestInit = {}, authRetryDone = false): Promise<Response> {
   const apiBaseUrl = ensureApiBaseUrl();
   const token = getToken();
   const url = `${apiBaseUrl}${path}`;
@@ -312,6 +360,22 @@ async function requestWithRetry(path: string, options: RequestInit = {}): Promis
     }
 
     if (response) {
+      if (response.status === 401) {
+        if (!authRetryDone) {
+          const refreshedToken = await tryRefreshToken();
+          if (refreshedToken) {
+            return requestWithRetry(path, options, true);
+          }
+        }
+
+        clearAuthSession();
+        throw new ApiRequestError("Sessão expirada", {
+          path,
+          status: 401,
+          code: "session_expired",
+        });
+      }
+
       return response;
     }
   }
@@ -429,8 +493,105 @@ function normalizeSourceTier(value: unknown): "S" | "A" | "B" | null {
   return null;
 }
 
+function normalizeUnitInterval(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  if (parsed <= 1) return Math.max(0, Math.min(1, parsed));
+  return Math.max(0, Math.min(1, parsed / 100));
+}
+
+function normalizeAspectSentiment(value: unknown): Record<string, AspectSentimentValue> | undefined {
+  const raw = ensureObject(value);
+  const output: Record<string, AspectSentimentValue> = {};
+
+  for (const [aspectKey, sentimentValue] of Object.entries(raw)) {
+    if (sentimentValue === null) {
+      output[aspectKey] = null;
+      continue;
+    }
+
+    const normalized = asString(sentimentValue, "").toLowerCase();
+    if (normalized === "positivo" || normalized === "positive") {
+      output[aspectKey] = "positivo";
+      continue;
+    }
+    if (normalized === "negativo" || normalized === "negative") {
+      output[aspectKey] = "negativo";
+      continue;
+    }
+    if (normalized === "neutro" || normalized === "neutral") {
+      output[aspectKey] = "neutro";
+    }
+  }
+
+  return Object.keys(output).length > 0 ? output : undefined;
+}
+
+function normalizeUrgencyTrend(value: unknown): UrgencyTrendPoint[] {
+  const rawArray = ensureArray<any>(value);
+
+  return rawArray
+    .map((entry) => {
+      const item = ensureObject(entry);
+      const date = asString(item.date || item.day || item.label, "");
+      if (!date) return null;
+
+      return {
+        date,
+        avg_score: normalizeUnitInterval(item.avg_score ?? item.average_score ?? item.urgency_score),
+        critical_count: Math.max(0, Math.round(asNumber(item.critical_count ?? item.critical_mentions, 0))),
+      };
+    })
+    .filter((entry): entry is UrgencyTrendPoint => entry !== null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function normalizeNamedCounts(value: unknown, aliases: string[]): NamedCount[] {
+  const rawObject = ensureObject(value);
+
+  if (Object.keys(rawObject).length > 0) {
+    return Object.entries(rawObject)
+      .map(([name, count]) => ({
+        name,
+        count: Math.max(0, Math.round(asNumber(count, 0))),
+      }))
+      .filter((entry) => entry.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }
+
+  const rawArray = ensureArray<any>(value);
+  return rawArray
+    .map((entry) => {
+      const item = ensureObject(entry);
+      const nameCandidate = aliases.map((alias) => item[alias]).find((candidate) => asString(candidate, "") !== "");
+      const name = asString(nameCandidate, "");
+      if (!name) return null;
+
+      const count = Math.max(0, Math.round(asNumber(item.count ?? item.value ?? item.total, 0)));
+      if (count <= 0) return null;
+
+      return { name, count };
+    })
+    .filter((entry): entry is NamedCount => entry !== null)
+    .sort((a, b) => b.count - a.count);
+}
+
+function normalizeTopNegativeAspects(value: unknown): Record<string, number> {
+  const asRecord = normalizeNumericRecord(value);
+  if (Object.keys(asRecord).length > 0) {
+    return asRecord;
+  }
+
+  const namedCounts = normalizeNamedCounts(value, ["aspect", "name", "key"]);
+  return namedCounts.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.name] = entry.count;
+    return acc;
+  }, {});
+}
+
 function normalizeMention(item: unknown): Mention {
   const raw = ensureObject(item);
+  const normalizedConfidence = normalizeUnitInterval(raw.confidence_score ?? raw.confidence ?? 0);
   return {
     id: asString(raw.id || raw._id || raw.external_id, "unknown"),
     brand_id: asNullableString(raw.brand_id),
@@ -443,7 +604,13 @@ function normalizeMention(item: unknown): Mention {
     criticality: asString(raw.criticality, "baixa"),
     urgency_score: asNumber(raw.urgency_score, 0),
     confidence: raw.confidence === null || raw.confidence === undefined ? undefined : asNumber(raw.confidence, 0),
+    confidence_score:
+      raw.confidence_score === null || raw.confidence_score === undefined
+        ? null
+        : normalizedConfidence,
     aspects: ensureArray<string>(raw.aspects),
+    urgency_factors: ensureArray<string>(raw.urgency_factors),
+    aspect_sentiment: normalizeAspectSentiment(raw.aspect_sentiment),
     critical_terms: ensureArray<string>(raw.critical_terms),
     rating: raw.rating === null || raw.rating === undefined ? undefined : asNumber(raw.rating, 0),
     author: asNullableString(raw.author),
@@ -455,6 +622,28 @@ function normalizeMention(item: unknown): Mention {
 
 function normalizeInsight(item: unknown): InsightItem {
   const raw = ensureObject(item);
+
+  let avgConfidence: number | undefined;
+  const directAvgConfidence = raw.avg_confidence ?? raw.confidence_score;
+  if (directAvgConfidence !== undefined && directAvgConfidence !== null) {
+    avgConfidence = normalizeUnitInterval(directAvgConfidence);
+  } else {
+    const mentionConfidenceScores = ensureArray<any>(raw.mentions)
+      .map((mention) => {
+        const rawMention = ensureObject(mention);
+        const confidenceValue = rawMention.confidence_score ?? rawMention.confidence;
+        return confidenceValue === null || confidenceValue === undefined
+          ? null
+          : normalizeUnitInterval(confidenceValue);
+      })
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+    if (mentionConfidenceScores.length > 0) {
+      const total = mentionConfidenceScores.reduce((acc, current) => acc + current, 0);
+      avgConfidence = total / mentionConfidenceScores.length;
+    }
+  }
+
   return {
     id: asString(raw.id || raw._id || raw.insight_id || raw.context_id, "unknown"),
     insight_id: asNullableString(raw.insight_id),
@@ -480,6 +669,7 @@ function normalizeInsight(item: unknown): InsightItem {
     recommended_actions: ensureArray<string>(raw.recommended_actions),
     decision_guidance: asNullableString(raw.decision_guidance),
     trend: asNullableString(raw.trend),
+    avg_confidence: avgConfidence,
     created_at: asNullableString(raw.created_at),
     updated_at: asNullableString(raw.updated_at),
   };
@@ -540,6 +730,8 @@ function normalizeDashboardMetrics(rawMetrics: unknown, mentions: Mention[] = []
   const sourceDistribution = normalizeNumericRecord(raw.source_distribution || raw.sources_distribution);
   const sourcesDistribution = normalizeNumericRecord(raw.sources_distribution || raw.source_distribution);
   const topAspects = normalizeNumericRecord(raw.top_aspects);
+  const urgencyTrend = normalizeUrgencyTrend(raw.urgency_trend);
+  const topNegativeAspects = normalizeTopNegativeAspects(raw.top_negative_aspects);
 
   let topThemes: Record<string, number> | string[] | undefined;
   if (Array.isArray(raw.top_themes)) {
@@ -563,6 +755,8 @@ function normalizeDashboardMetrics(rawMetrics: unknown, mentions: Mention[] = []
     sentiment_score: raw.sentiment_score === undefined || raw.sentiment_score === null ? undefined : asNumber(raw.sentiment_score, 0),
     negative_count: raw.negative_count === undefined || raw.negative_count === null ? undefined : asNumber(raw.negative_count, 0),
     trend: asNullableString(raw.trend),
+    urgency_trend: urgencyTrend,
+    top_negative_aspects: topNegativeAspects,
     recent_mentions: ensureArray<any>(raw.recent_mentions).map(normalizeMention),
   };
 }
@@ -632,14 +826,22 @@ export function getToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY);
 }
 
-export function setAuthSession(token: string, user: AuthUser) {
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setAuthSession(token: string, user: AuthUser, refreshToken?: string) {
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  }
 }
 
 export function clearAuthSession() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export function getStoredUser(): AuthUser | null {
@@ -706,11 +908,17 @@ export const authApi = {
       body: JSON.stringify(payload),
     });
   },
-  login(payload: { email: string; password: string; mfa_code?: string }) {
-    return apiFetch<LoginResponse>("/api/auth/login", {
+  async login(payload: { email: string; password: string; mfa_code?: string }) {
+    const data = await apiFetch<LoginResponse>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+
+    if ("access_token" in data) {
+      setAuthSession(data.access_token, data.user, data.refresh_token);
+    }
+
+    return data;
   },
   me() {
     return apiFetch<AuthUser>("/api/auth/me");
@@ -783,7 +991,10 @@ export type Mention = {
   criticality: string;
   urgency_score?: number;
   confidence?: number;
+  confidence_score?: number | null;
   aspects?: string[];
+  urgency_factors?: string[];
+  aspect_sentiment?: Record<string, AspectSentimentValue>;
   critical_terms?: string[];
   rating?: number;
   author?: string;
@@ -807,6 +1018,8 @@ export type DashboardMetrics = {
   sentiment_score?: number;
   negative_count?: number;
   trend?: string;
+  urgency_trend?: UrgencyTrendPoint[];
+  top_negative_aspects?: Record<string, number>;
   recent_mentions?: Mention[];
 };
 
@@ -847,8 +1060,22 @@ export type InsightItem = {
   recommended_actions?: string[];
   decision_guidance?: string;
   trend?: string;
+  avg_confidence?: number;
   created_at?: string;
   updated_at?: string;
+};
+
+export type MetricsClassificationResponse = {
+  period_days: number;
+  total_analyzed: number;
+  avg_urgency_score: number;
+  avg_confidence: number;
+  critical_mentions: number;
+  by_sentiment: Record<string, number>;
+  by_criticality: Record<string, number>;
+  top_urgency_factors: Array<{ factor: string; count: number }>;
+  top_aspects_negative: Array<{ aspect: string; count: number }>;
+  sources_coverage: Array<{ source: string; count: number }>;
 };
 
 export type InsightsResponse = {
@@ -1028,12 +1255,20 @@ export const sentimentApi = {
     const raw = await apiFetch<any>(`/api/dashboard${suffix}`);
     const data = ensureObject(raw);
     const mentions = ensureArray<any>(data.mentions).map(normalizeMention);
+    const normalizedMetrics = normalizeDashboardMetrics(
+      {
+        ...ensureObject(data.metrics),
+        urgency_trend: data.urgency_trend ?? data.metrics?.urgency_trend,
+        top_negative_aspects: data.top_negative_aspects ?? data.metrics?.top_negative_aspects,
+      },
+      mentions
+    );
 
     return {
       search_id: asNullableString(data.search_id || data.batch_id) ?? null,
       batch_id: asNullableString(data.batch_id || data.search_id) ?? null,
       query: asNullableString(data.query),
-      metrics: normalizeDashboardMetrics(data.metrics, mentions),
+      metrics: normalizedMetrics,
       mentions,
       latest_insight: data.latest_insight ? normalizeInsight(data.latest_insight) : null,
       alerts: ensureArray<any>(data.alerts),
@@ -1330,6 +1565,37 @@ export const sentimentApi = {
           created_at: asString(rawComment.created_at, ""),
         };
       }),
+    };
+  },
+  async metricsClassification(periodDays = 30): Promise<MetricsClassificationResponse> {
+    const safePeriod = Math.max(1, Math.min(365, Math.round(periodDays || 30)));
+    const raw = await apiFetch<any>(`/api/metrics/classification?period_days=${safePeriod}`);
+    const data = ensureObject(raw);
+
+    const topUrgencyFactors = normalizeNamedCounts(data.top_urgency_factors, ["factor", "name", "label"]).map((entry) => ({
+      factor: entry.name,
+      count: entry.count,
+    }));
+    const topNegativeAspects = normalizeNamedCounts(data.top_aspects_negative, ["aspect", "name", "key"]).map((entry) => ({
+      aspect: entry.name,
+      count: entry.count,
+    }));
+    const sourcesCoverage = normalizeNamedCounts(data.sources_coverage, ["source", "name", "key"]).map((entry) => ({
+      source: entry.name,
+      count: entry.count,
+    }));
+
+    return {
+      period_days: asNumber(data.period_days, safePeriod),
+      total_analyzed: Math.max(0, Math.round(asNumber(data.total_analyzed ?? data.total_mentions, 0))),
+      avg_urgency_score: normalizeUnitInterval(data.avg_urgency_score ?? data.avg_urgency ?? data.urgency_score),
+      avg_confidence: normalizeUnitInterval(data.avg_confidence ?? data.avg_confidence_score),
+      critical_mentions: Math.max(0, Math.round(asNumber(data.critical_mentions ?? data.critical_count, 0))),
+      by_sentiment: normalizeNumericRecord(data.by_sentiment),
+      by_criticality: normalizeNumericRecord(data.by_criticality),
+      top_urgency_factors: topUrgencyFactors.slice(0, 10),
+      top_aspects_negative: topNegativeAspects.slice(0, 10),
+      sources_coverage: sourcesCoverage,
     };
   },
   privacyConsent(payload: { session_id: string; analytics: boolean; marketing: boolean }) {

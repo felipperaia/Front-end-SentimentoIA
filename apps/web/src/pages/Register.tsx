@@ -51,7 +51,7 @@ export default function Register() {
         phone: formData.phone.trim() || undefined,
         password: formData.password,
       });
-      setAuthSession(response.access_token, response.user);
+      setAuthSession(response.access_token, response.user, response.refresh_token);
       setSuccess(true);
       setTimeout(() => setLocation("/search"), 800);
     } catch (error) {

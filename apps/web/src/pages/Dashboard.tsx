@@ -17,6 +17,9 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Legend,
+  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -25,8 +28,9 @@ import {
   YAxis,
 } from "recharts";
 import { DashboardMetrics, DashboardResponse, Mention, NpsMetrics, sentimentApi } from "@/lib/api";
+import { MentionCard } from "@/components/MentionCard";
 import { DataManagementModal } from "@/components/DataManagementModal";
-import { SourceTierBadge } from "@/components/SourceTierBadge";
+import { ASPECT_LABELS } from "@/lib/aspectLabels";
 import { getSourceColor, getSourceLabel } from "@/lib/sourceColors";
 
 const COLORS = ["#0f766e", "#ea580c", "#0ea5e9", "#16a34a", "#db2777", "#7c3aed"];
@@ -198,6 +202,12 @@ function resolveTrend(trend?: string) {
   return { symbol: "→", label: "Estável" };
 }
 
+function formatUrgencyDate(rawDate: string): string {
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return rawDate;
+  return parsed.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
 function SourceDistributionTooltip({
   active,
   payload,
@@ -313,6 +323,23 @@ export default function Dashboard() {
   const negativeRatio = negativeCount / totalComments;
   const statusBanner = resolveStatusBanner(sentimentScore, negativeRatio);
   const trend = resolveTrend(data?.latest_insight?.trend ?? metrics.trend);
+  const urgencyTrend = useMemo(
+    () => (metrics.urgency_trend ?? []).filter((point) => String(point.date || "").trim().length > 0),
+    [metrics.urgency_trend]
+  );
+  const topNegativeAspectData = useMemo(
+    () =>
+      Object.entries(metrics.top_negative_aspects ?? {})
+        .map(([aspect, count]) => ({
+          aspect,
+          label: ASPECT_LABELS[aspect] ?? aspect,
+          count: Math.max(0, Math.round(toFiniteNumber(count, 0))),
+        }))
+        .filter((item) => item.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+    [metrics.top_negative_aspects]
+  );
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat(settings.locale), [settings.locale]);
 
@@ -449,6 +476,55 @@ export default function Dashboard() {
             </article>
           </section>
 
+          <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <article className="app-panel p-5 md:p-6">
+              <h2 className="panel-title">Evolução da Urgência</h2>
+              {urgencyTrend.length === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">Sem dados de evolução de urgência para exibir.</p>
+              ) : (
+                <div className="h-[260px] mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={urgencyTrend}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tickFormatter={formatUrgencyDate} />
+                      <YAxis yAxisId="left" domain={[0, 1]} tickFormatter={(value: number) => `${Math.round(value * 100)}%`} />
+                      <YAxis yAxisId="right" orientation="right" allowDecimals={false} />
+                      <Tooltip
+                        formatter={(value: number | string, name: string) =>
+                          name === "avg_score"
+                            ? [`${Math.round(Number(value) * 100)}%`, "Score médio"]
+                            : [value, "Críticas"]
+                        }
+                      />
+                      <Legend />
+                      <Bar yAxisId="right" dataKey="critical_count" name="Críticas" fill="#ef4444" opacity={0.7} />
+                      <Line yAxisId="left" type="monotone" dataKey="avg_score" name="Urgência média" stroke="#f97316" strokeWidth={2} dot={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </article>
+
+            <article className="app-panel p-5 md:p-6">
+              <h2 className="panel-title">Principais aspectos negativos</h2>
+              {topNegativeAspectData.length === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">Sem dados de aspectos negativos para exibir.</p>
+              ) : (
+                <div className="h-[260px] mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topNegativeAspectData} layout="vertical" margin={{ left: 12, right: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                      <XAxis type="number" allowDecimals={false} stroke="var(--muted-foreground)" />
+                      <YAxis type="category" dataKey="label" width={130} stroke="var(--muted-foreground)" />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#ef4444" radius={[0, 8, 8, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </article>
+          </section>
+
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             <article className="app-panel p-5 md:p-6 xl:col-span-2">
               <h2 className="panel-title">{t("dashboard.aspects")}</h2>
@@ -475,21 +551,7 @@ export default function Dashboard() {
               </h2>
               <div className="space-y-3 pr-1">
                 {mentions.slice(0, 6).map((mention) => (
-                  <div key={mention.id} className="rounded-xl border border-border/70 bg-background/75 p-3">
-                    <div className="mb-2 flex items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white"
-                          style={{ backgroundColor: getSourceColor(mention.source) }}
-                        >
-                          {getSourceLabel(mention.source)}
-                        </span>
-                        <SourceTierBadge tier={mention?.source_tier} />
-                      </div>
-                      <span className="text-muted-foreground">{mention.sentiment}</span>
-                    </div>
-                    <p className="line-clamp-3 text-sm">{mention.text}</p>
-                  </div>
+                  <MentionCard key={mention.id} mention={mention} />
                 ))}
               </div>
             </article>

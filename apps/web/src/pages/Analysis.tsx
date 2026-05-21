@@ -15,6 +15,42 @@ function resolveInsightId(item: InsightItem): string {
   return item.insight_id || item.id;
 }
 
+function resolveInsightConfidence(item: InsightItem): number | null {
+  if (typeof item.avg_confidence !== "number" || !Number.isFinite(item.avg_confidence)) {
+    return null;
+  }
+
+  if (item.avg_confidence <= 1) {
+    return Math.max(0, Math.min(1, item.avg_confidence));
+  }
+
+  return Math.max(0, Math.min(1, item.avg_confidence / 100));
+}
+
+function resolveConfidenceBadge(confidence: number, t: ReturnType<typeof useAppSettings>["t"]) {
+  if (confidence >= 0.75) {
+    return {
+      label: t("mention.confidenceHigh"),
+      icon: "✓",
+      className: "badge-chip border border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200",
+    };
+  }
+
+  if (confidence >= 0.5) {
+    return {
+      label: t("mention.confidenceMedium"),
+      icon: "~",
+      className: "badge-chip border border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+    };
+  }
+
+  return {
+    label: t("mention.confidenceLow"),
+    icon: "⚠",
+    className: "badge-chip border border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-200",
+  };
+}
+
 export default function AnalysisPage() {
   const { settings, t } = useAppSettings();
   const [items, setItems] = useState<InsightItem[]>([]);
@@ -136,6 +172,9 @@ export default function AnalysisPage() {
         {items.map((item) => {
           const insightId = resolveInsightId(item);
           const isRunning = activeActionId === insightId;
+          const confidence = resolveInsightConfidence(item);
+          const confidencePercent = confidence === null ? null : Math.round(confidence * 100);
+          const confidenceBadge = confidence === null ? null : resolveConfidenceBadge(confidence, t);
           return (
             <article key={insightId} className="app-panel p-5 md:p-6">
               <header className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -151,6 +190,11 @@ export default function AnalysisPage() {
                     <span className="badge-chip">Urgência: {urgencyLabel(item.urgency)}</span>
                     <span className="badge-chip">Status: {statusLabel(item.status)}</span>
                     <span className="badge-chip">Resolução: {resolutionLabel(item.resolution)}</span>
+                    {confidenceBadge ? (
+                      <span className={confidenceBadge.className} title={t("analysis.confidenceTooltip")}>
+                        {confidenceBadge.icon} {confidenceBadge.label} ({confidencePercent}%)
+                      </span>
+                    ) : null}
                     {item.archived ? <span className="badge-chip">{t("analysis.archived")}</span> : null}
                   </div>
                 </div>

@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { Brain, FileText, LayoutDashboard, LogOut, Search, Settings2, type LucideIcon } from "lucide-react";
+import { BarChart3, Brain, FileText, LayoutDashboard, LogOut, Search, Settings2, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 
@@ -30,6 +30,7 @@ export function AppShell({ title, subtitle, actions, children }: Readonly<ShellP
     { path: "/search", label: t("nav.search"), icon: Search },
     { path: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
     { path: "/analysis", label: t("nav.insights"), icon: Brain },
+    { path: "/metrics", label: t("nav.metrics"), icon: BarChart3 },
     { path: "/reports", label: t("nav.reports"), icon: FileText },
     { path: "/settings", label: t("nav.settings"), icon: Settings2 },
   ];

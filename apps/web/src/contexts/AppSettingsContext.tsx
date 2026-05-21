@@ -27,11 +27,26 @@ const AppSettingsContext = createContext<AppSettingsContextType | undefined>(und
 
 function loadStoredSettings(): UserSettings {
   try {
+    const storedTheme = localStorage.getItem("theme");
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
+    if (!raw) {
+      return {
+        ...DEFAULT_SETTINGS,
+        theme: storedTheme === "dark" ? "dark" : "light",
+      };
+    }
+
     const parsed = JSON.parse(raw) as Partial<UserSettings>;
+
+    const normalizedTheme =
+      storedTheme === "dark" || storedTheme === "light"
+        ? storedTheme
+        : parsed.theme === "dark"
+          ? "dark"
+          : "light";
+
     return {
-      theme: parsed.theme === "dark" ? "dark" : "light",
+      theme: normalizedTheme,
       locale: parsed.locale === "en-US" ? "en-US" : "pt-BR",
       llm_trigger_min_comments: Math.max(1, Number(parsed.llm_trigger_min_comments || 20)),
       updated_at: parsed.updated_at,
@@ -57,10 +72,13 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    applyTheme(settings.theme);
     document.documentElement.lang = settings.locale;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    applyTheme(settings.theme);
+  }, [settings.theme]);
 
   const refreshSettings = useCallback(async () => {
     const token = getToken();
@@ -121,7 +139,9 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   );
 
   const setThemePreference = useCallback((theme: AppTheme) => {
-    setSettings((current) => ({ ...current, theme }));
+    const normalizedTheme: AppTheme = theme === "dark" ? "dark" : "light";
+    applyTheme(normalizedTheme);
+    setSettings((current) => ({ ...current, theme: normalizedTheme }));
   }, []);
 
   const setLocalePreference = useCallback((locale: AppLocale) => {

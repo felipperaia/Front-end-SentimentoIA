@@ -18,6 +18,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SearchPage = lazy(() => import("./pages/Search"));
 const AnalysisPage = lazy(() => import("./pages/Analysis"));
+const MetricsPage = lazy(() => import("./pages/Metrics"));
 const ReportsPage = lazy(() => import("./pages/Reports"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
 const MFAVerify = lazy(() => import("./pages/MFAVerify"));
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/dashboard">{() => <ProtectedRoute><Dashboard /></ProtectedRoute>}</Route>
       <Route path="/search">{() => <ProtectedRoute><SearchPage /></ProtectedRoute>}</Route>
       <Route path="/analysis">{() => <ProtectedRoute><AnalysisPage /></ProtectedRoute>}</Route>
+      <Route path="/metrics">{() => <ProtectedRoute><MetricsPage /></ProtectedRoute>}</Route>
       <Route path="/reports">{() => <ProtectedRoute><ReportsPage /></ProtectedRoute>}</Route>
       <Route path="/settings">{() => <ProtectedRoute><SettingsPage /></ProtectedRoute>}</Route>
       <Route path="/404" component={NotFound} />
