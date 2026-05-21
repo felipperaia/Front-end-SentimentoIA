@@ -173,6 +173,10 @@ export const TRANSLATIONS = {
     "pt-BR": "Fontes monitoradas",
     "en-US": "Monitored sources",
   },
+  "home.metricMentionsValue": {
+    "pt-BR": "Reclame Aqui · Reddit · YouTube · App Store · Google Play · Glassdoor · Trustpilot · Web",
+    "en-US": "Reclame Aqui · Reddit · YouTube · App Store · Google Play · Glassdoor · Trustpilot · Web",
+  },
   "home.metricInsights": {
     "pt-BR": "Insights acionáveis",
     "en-US": "Actionable insights",
@@ -214,12 +218,12 @@ export const TRANSLATIONS = {
     "en-US": "Everything teams need to run reputation with cadence.",
   },
   "home.featureCollectionTitle": {
-    "pt-BR": "Coleta multicanal",
-    "en-US": "Multi-channel collection",
+    "pt-BR": "Coleta nas fontes monitoradas",
+    "en-US": "Collection on monitored sources",
   },
   "home.featureCollectionText": {
-    "pt-BR": "Busque menções em Reddit, Reclame Aqui e Web aberto com coleta incremental.",
-    "en-US": "Search mentions across Reddit, Reclame Aqui, and open Web with incremental collection.",
+    "pt-BR": "Monitore as fontes ativas com coleta incremental.",
+    "en-US": "Monitor active sources with incremental collection.",
   },
   "home.featureAiTitle": {
     "pt-BR": "Leitura de criticidade",
