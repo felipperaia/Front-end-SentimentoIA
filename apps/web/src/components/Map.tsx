@@ -86,20 +86,15 @@ declare global {
   }
 }
 
-const API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
-const MAPS_ENABLED = String(import.meta.env.VITE_ENABLE_MAP || "false") === "true";
-const FORGE_BASE_URL =
-  import.meta.env.VITE_FRONTEND_FORGE_API_URL ||
-  "https://forge.butterfly-effect.dev";
-const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
-
 let scriptPromise: Promise<boolean> | null = null;
+let loadedMapsKey: string | null = null;
 
-function loadMapScript() {
-  if (scriptPromise) return scriptPromise;
+function loadMapScript(mapsKey: string) {
+  if (scriptPromise && loadedMapsKey === mapsKey) return scriptPromise;
+  loadedMapsKey = mapsKey;
 
   scriptPromise = new Promise<boolean>((resolve) => {
-    if (!MAPS_ENABLED || !API_KEY) {
+    if (!mapsKey) {
       resolve(false);
       return;
     }
@@ -110,7 +105,7 @@ function loadMapScript() {
     }
 
     const script = document.createElement("script");
-    script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(mapsKey)}&v=weekly&libraries=marker,places,geocoding,geometry`;
     script.async = true;
     script.crossOrigin = "anonymous";
     script.onload = () => {
@@ -141,12 +136,13 @@ export function MapView({
   initialZoom = 12,
   onMapReady,
 }: Readonly<MapViewProps>) {
+  const mapsKey = String(import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "").trim();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const [unavailable, setUnavailable] = useState(false);
 
   const init = usePersistFn(async () => {
-    const scriptReady = await loadMapScript();
+    const scriptReady = await loadMapScript(mapsKey);
     if (!scriptReady) {
       setUnavailable(true);
       return;
@@ -170,7 +166,6 @@ export function MapView({
       fullscreenControl: true,
       zoomControl: true,
       streetViewControl: true,
-      mapId: "DEMO_MAP_ID",
     });
     if (onMapReady) {
       onMapReady(map.current);
@@ -178,14 +173,28 @@ export function MapView({
   });
 
   useEffect(() => {
+    if (!mapsKey) {
+      return;
+    }
+
     init().catch(() => setUnavailable(true));
-  }, [init]);
+  }, [init, mapsKey]);
+
+  if (!mapsKey) {
+    return (
+      <div className={cn("flex h-[500px] w-full items-center justify-center rounded-xl border border-border/70 bg-muted/20", className)}>
+        <p className="px-4 text-center text-sm text-muted-foreground">
+          Visualização de mapa indisponível.
+        </p>
+      </div>
+    );
+  }
 
   if (unavailable) {
     return (
       <div className={cn("flex h-[500px] w-full items-center justify-center rounded-xl border border-border/70 bg-muted/20", className)}>
         <p className="px-4 text-center text-sm text-muted-foreground">
-          Mapa indisponivel no ambiente atual.
+          Visualização de mapa indisponível.
         </p>
       </div>
     );

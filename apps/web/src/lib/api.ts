@@ -3,9 +3,9 @@ import { translate, type TranslationKey } from "@/lib/i18n";
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_URL || "")
   .trim()
   .replace(/\/+$/, "");
-const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 60000);
+const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 90000);
 const configuredRetryAttempts = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS || 2);
-const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS || 700);
+const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS || 1000);
 
 export const API_BASE_URL = configuredApiBaseUrl;
 export const AUTH_TOKEN_KEY = "sentimentoia_access_token";
@@ -13,13 +13,17 @@ export const AUTH_USER_KEY = "sentimentoia_user";
 const SETTINGS_STORAGE_KEY = "sentimentoia_preferences";
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs)
   ? Math.max(1000, configuredApiTimeoutMs)
-  : 60000;
+  : 90000;
 const API_RETRY_ATTEMPTS = Number.isFinite(configuredRetryAttempts)
   ? Math.max(0, Math.min(5, configuredRetryAttempts))
   : 2;
 const API_RETRY_DELAY_MS = Number.isFinite(configuredRetryDelayMs)
   ? Math.max(100, configuredRetryDelayMs)
-  : 700;
+  : 1000;
+const LONG_PATHS = ["/api/search", "/api/scrape"] as const;
+const LONG_REQUEST_TIMEOUT_MS = 120_000;
+const SEARCH_TIMEOUT_MESSAGE =
+  "A busca demorou mais que o esperado. Tente selecionar menos fontes ou reduza o período de busca.";
 const AI_UPSTREAM_PATH_PREFIXES = ["/api/chat", "/api/insights", "/api/analyze"] as const;
 const SESSION_EXPIRED_PATTERNS = [/session expired/i, /token expired/i, /jwt/i, /authentication required/i];
 const TIMEOUT_PATTERNS = [/timeout/i, /timed out/i, /deadline exceeded/i, /request aborted/i];
@@ -122,6 +126,10 @@ function isAiUpstreamPath(path: string): boolean {
   return AI_UPSTREAM_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
+function isLongRequestPath(path: string): boolean {
+  return LONG_PATHS.some((prefix) => path.startsWith(prefix));
+}
+
 function matchesAnyPattern(text: string, patterns: readonly RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
@@ -154,6 +162,10 @@ function resolveAiSpecificError(status: number | undefined, detailText: string):
   return null;
 }
 
+function resolveTimeoutFriendlyMessage(path: string): string {
+  return isLongRequestPath(path) ? SEARCH_TIMEOUT_MESSAGE : tApi("api.timeout");
+}
+
 function resolveFriendlyErrorMessage(params: {
   path: string;
   status?: number;
@@ -168,7 +180,7 @@ function resolveFriendlyErrorMessage(params: {
   }
 
   if (isTimeoutError(params.status, detailText)) {
-    return tApi("api.timeout");
+    return resolveTimeoutFriendlyMessage(params.path);
   }
 
   if (detailText && matchesAnyPattern(detailText, NETWORK_UNAVAILABLE_PATTERNS)) {
@@ -230,48 +242,82 @@ function shouldRetryStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
+type RequestAttemptResult = {
+  response: Response | null;
+  networkError?: unknown;
+};
+
+async function runRequestAttempt(params: {
+  url: string;
+  options: RequestInit;
+  token: string | null;
+  attempt: number;
+  timeoutMs: number;
+}): Promise<RequestAttemptResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
+
+  try {
+    const response = await fetch(params.url, {
+      ...params.options,
+      headers: buildAuthHeaders(params.options, params.token),
+      signal: controller.signal,
+    });
+
+    if (response.status === 401) {
+      clearAuthSession();
+    }
+
+    if (!response.ok && shouldRetryStatus(response.status) && params.attempt < API_RETRY_ATTEMPTS) {
+      await wait(API_RETRY_DELAY_MS * (params.attempt + 1));
+      return { response: null };
+    }
+
+    return { response };
+  } catch (err) {
+    if (params.attempt < API_RETRY_ATTEMPTS) {
+      await wait(API_RETRY_DELAY_MS * (params.attempt + 1));
+    }
+
+    return {
+      response: null,
+      networkError: err,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function requestWithRetry(path: string, options: RequestInit = {}): Promise<Response> {
   const apiBaseUrl = ensureApiBaseUrl();
   const token = getToken();
   const url = `${apiBaseUrl}${path}`;
+  const apiTimeout = API_TIMEOUT_MS;
+  const isLongRequest = isLongRequestPath(path);
 
   let lastNetworkError: unknown = null;
 
   for (let attempt = 0; attempt <= API_RETRY_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const timeout = isLongRequest ? LONG_REQUEST_TIMEOUT_MS : apiTimeout;
+    const { response, networkError } = await runRequestAttempt({
+      url,
+      options,
+      token,
+      attempt,
+      timeoutMs: timeout,
+    });
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: buildAuthHeaders(options, token),
-        signal: controller.signal,
-      });
+    if (networkError !== undefined) {
+      lastNetworkError = networkError;
+    }
 
-      if (response.status === 401) {
-        clearAuthSession();
-      }
-
-      if (!response.ok && shouldRetryStatus(response.status) && attempt < API_RETRY_ATTEMPTS) {
-        await wait(API_RETRY_DELAY_MS * (attempt + 1));
-        continue;
-      }
-
+    if (response) {
       return response;
-    } catch (err) {
-      lastNetworkError = err;
-
-      if (attempt < API_RETRY_ATTEMPTS) {
-        await wait(API_RETRY_DELAY_MS * (attempt + 1));
-        continue;
-      }
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
   if (lastNetworkError instanceof DOMException && lastNetworkError.name === "AbortError") {
-    throw new Error(tApi("api.timeout"));
+    throw new Error(resolveTimeoutFriendlyMessage(path));
   }
 
   if (lastNetworkError instanceof Error) {
@@ -594,7 +640,6 @@ export function setAuthSession(token: string, user: AuthUser) {
 export function clearAuthSession() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
-  localStorage.removeItem("manus-runtime-user-info");
 }
 
 export function getStoredUser(): AuthUser | null {

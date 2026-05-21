@@ -115,6 +115,18 @@ function searchStatusClass(status: SearchResponse["status"] | undefined): string
   return "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200";
 }
 
+function getSearchProgressMessage(elapsedSeconds: number): string {
+  if (elapsedSeconds < 15) {
+    return "Coletando menções nas fontes selecionadas...";
+  }
+
+  if (elapsedSeconds < 45) {
+    return "Analisando sentimentos (pode levar até 2 min)...";
+  }
+
+  return "Finalizando e agregando resultados...";
+}
+
 export default function SearchPage() {
   const { t } = useAppSettings();
   const [, setLocation] = useLocation();
@@ -128,6 +140,8 @@ export default function SearchPage() {
   const [locality, setLocality] = useState("");
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0);
   const [lastResult, setLastResult] = useState<SearchResponse | null>(null);
   const [lastScrape, setLastScrape] = useState<ScrapeResponse | null>(null);
 
@@ -175,6 +189,22 @@ export default function SearchPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isSearching) {
+      setSearchElapsedSeconds(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const intervalId = globalThis.setInterval(() => {
+      setSearchElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => {
+      globalThis.clearInterval(intervalId);
+    };
+  }, [isSearching]);
+
   const groupedMentions = useMemo(() => {
     const groups: Record<string, Mention[]> = {};
 
@@ -208,6 +238,45 @@ export default function SearchPage() {
   const effectiveStatusSummary = lastResult?.status_summary || lastScrape?.status_summary;
   const effectiveTotal = lastResult?.total ?? lastScrape?.total ?? 0;
   const hasRunData = Boolean(lastResult || lastScrape);
+  const sourceStatusItems = effectiveStatusSummary?.source_status || [];
+  const timeoutSourceSet = new Set([
+    ...sourceStatusItems.filter((item) => item.timeout).map((item) => item.source),
+    ...(effectiveStatusSummary?.timeout_sources || []),
+  ]);
+  const successfulSources = sourceStatusItems.filter((item) => item.ok).map((item) => item.source);
+  const failedSources = sourceStatusItems
+    .filter((item) => !item.ok && !timeoutSourceSet.has(item.source))
+    .map((item) => item.source);
+  const timeoutSources = Array.from(timeoutSourceSet);
+  const searchingHint = getSearchProgressMessage(searchElapsedSeconds);
+  const loadingPanel = (() => {
+    if (isSearching) {
+      return (
+        <article className="app-panel p-6 md:p-7">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="animate-spin" size={18} />
+            <span>{searchingHint}</span>
+          </div>
+          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-full animate-pulse rounded-full bg-[color:var(--brand)]/80" />
+          </div>
+        </article>
+      );
+    }
+
+    if (loading) {
+      return (
+        <article className="app-panel p-6 md:p-7">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="animate-spin" size={18} />
+            <span>{t("search.loadingHint")}</span>
+          </div>
+        </article>
+      );
+    }
+
+    return null;
+  })();
 
   const sources = sourceOptions;
 
@@ -228,6 +297,8 @@ export default function SearchPage() {
     }
 
     setLoading(true);
+    setIsSearching(true);
+    setSearchElapsedSeconds(0);
 
     try {
       const [scrapeResult, searchResult] = await Promise.allSettled([
@@ -285,6 +356,7 @@ export default function SearchPage() {
       console.error(t("search.error"), err);
       toast.error(err instanceof Error ? err.message : t("search.error"));
     } finally {
+      setIsSearching(false);
       setLoading(false);
     }
   };
@@ -399,14 +471,7 @@ export default function SearchPage() {
             </div>
           </article>
 
-          {loading ? (
-            <article className="app-panel p-6 md:p-7">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Loader2 className="animate-spin" size={18} />
-                <span>{t("search.loadingHint")}</span>
-              </div>
-            </article>
-          ) : null}
+          {loadingPanel}
 
           {hasRunData ? (
             <article className="app-panel p-6 md:p-7">
@@ -519,6 +584,20 @@ export default function SearchPage() {
               <p className="mt-1 text-xs text-muted-foreground">
                 Search ID: {lastResult?.search_id || "-"}
               </p>
+              {sourceStatusItems.length > 0 || timeoutSources.length > 0 ? (
+                <div className="mt-3 space-y-1 rounded-xl border border-border/70 bg-muted/30 p-3 text-xs">
+                  <p className="font-semibold uppercase text-muted-foreground">Status por fonte</p>
+                  <p>
+                    <span className="text-muted-foreground">Sucesso:</span> {successfulSources.length > 0 ? successfulSources.join(", ") : "-"}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Falha:</span> {failedSources.length > 0 ? failedSources.join(", ") : "-"}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Timeout:</span> {timeoutSources.length > 0 ? timeoutSources.join(", ") : "-"}
+                  </p>
+                </div>
+              ) : null}
               {searchErrors.length > 0 ? (
                 <div className="mt-3 space-y-2">
                   <p className="text-xs font-semibold uppercase text-muted-foreground">{t("search.sourceErrors")}</p>
