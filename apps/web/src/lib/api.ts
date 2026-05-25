@@ -42,7 +42,7 @@ const API_RETRY_DELAY_MS = Number.isFinite(configuredRetryDelayMs)
 const LONG_PATHS = ["/api/search", "/api/scrape"] as const;
 const LONG_REQUEST_TIMEOUT_MS = 120_000;
 const SEARCH_TIMEOUT_MESSAGE =
-  "A busca demorou mais que o esperado. Tente selecionar menos fontes ou reduza o período de busca.";
+  "A busca demorou mais que o esperado. Tente selecionar menos fontes ou reduza o periodo de busca.";
 const AI_UPSTREAM_PATH_PREFIXES = ["/api/chat", "/api/insights", "/api/analyze"] as const;
 const SESSION_EXPIRED_PATTERNS = [/session expired/i, /token expired/i, /jwt/i, /authentication required/i];
 const TIMEOUT_PATTERNS = [/timeout/i, /timed out/i, /deadline exceeded/i, /request aborted/i];
@@ -2252,3 +2252,4 @@ export async function downloadInsightsReport(
   const resolvedFilename = filename || (format === "markdown" ? "insights.md" : "insights.pdf");
   triggerBlobDownload(blob, resolvedFilename);
 }
+
