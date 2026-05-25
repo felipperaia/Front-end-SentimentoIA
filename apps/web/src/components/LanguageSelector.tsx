@@ -16,6 +16,7 @@ export function LanguageSelector({ className, compact = false }: LanguageSelecto
       <Languages size={16} aria-hidden="true" />
       <span className="sr-only">{t("common.language")}</span>
       <select
+        className="language-select-control"
         value={settings.locale}
         onChange={(event) => setLocalePreference(event.target.value as AppLocale)}
         aria-label={t("common.language")}

@@ -9,7 +9,12 @@ import {
   Trash2,
   Wand2,
 } from "lucide-react";
-import { ApiRequestError, InsightItem, sentimentApi } from "@/lib/api";
+import {
+  ApiRequestError,
+  type CompanyItem,
+  type InsightItem,
+  sentimentApi,
+} from "@/lib/api";
 
 function resolveInsightId(item: InsightItem): string {
   return item.insight_id || item.id;
@@ -25,6 +30,36 @@ function resolveInsightConfidence(item: InsightItem): number | null {
   }
 
   return Math.max(0, Math.min(1, item.avg_confidence / 100));
+}
+
+function resolveInsightDateSortValue(item: InsightItem): number {
+  const rawDate =
+    item.period_to ||
+    item.period_from ||
+    item.timestamp ||
+    item.created_at ||
+    item.updated_at ||
+    "";
+
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return 0;
+  return parsed.getTime();
+}
+
+function resolveInsightPeriodLabel(item: InsightItem): string {
+  if (item.period_label && item.period_label.trim()) {
+    return item.period_label;
+  }
+
+  if (item.period_from && item.period_to) {
+    return `${item.period_from} - ${item.period_to}`;
+  }
+
+  if (item.period_from || item.period_to) {
+    return item.period_from || item.period_to || "Periodo nao informado";
+  }
+
+  return item.batch_id || "Periodo nao informado";
 }
 
 function resolveConfidenceBadge(confidence: number, t: ReturnType<typeof useAppSettings>["t"]) {
@@ -53,15 +88,41 @@ function resolveConfidenceBadge(confidence: number, t: ReturnType<typeof useAppS
 
 export default function AnalysisPage() {
   const { settings, t } = useAppSettings();
+  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [items, setItems] = useState<InsightItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [resolutionFilter, setResolutionFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
   const [error, setError] = useState("");
   const [expectedStateMessage, setExpectedStateMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCompanies() {
+      try {
+        const response = await sentimentApi.listCompanies();
+        if (!active) return;
+        setCompanies(response.items || []);
+      } catch {
+        if (!active) return;
+        setCompanies([]);
+      }
+    }
+
+    void loadCompanies();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function loadInsights(include = includeArchived) {
     setLoading(true);
@@ -71,7 +132,11 @@ export default function AnalysisPage() {
         include_archived: include,
         limit: 100,
         priority: priorityFilter === "all" ? undefined : priorityFilter,
+        urgency: urgencyFilter === "all" ? undefined : urgencyFilter,
         resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
+        company_id: selectedCompanyId || undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
       };
       const response = await sentimentApi.insights(existingParams);
       let normalizedItems: InsightItem[] = [];
@@ -80,7 +145,11 @@ export default function AnalysisPage() {
       } else if (Array.isArray(response as unknown)) {
         normalizedItems = response as unknown as InsightItem[];
       }
-      setItems(normalizedItems);
+      setItems(
+        [...normalizedItems].sort(
+          (a, b) => resolveInsightDateSortValue(b) - resolveInsightDateSortValue(a)
+        )
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : t("analysis.loadError"));
       setItems([]);
@@ -91,7 +160,7 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     void loadInsights();
-  }, [includeArchived, priorityFilter, resolutionFilter]);
+  }, [includeArchived, priorityFilter, urgencyFilter, resolutionFilter, selectedCompanyId, fromDate, toDate]);
 
   async function handleGenerate() {
     setProcessing(true);
@@ -182,7 +251,8 @@ export default function AnalysisPage() {
                   <h2 className="text-xl font-semibold">{item.executive_summary || t("analysis.untitled")}</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span className="badge-chip">{item.trend || t("analysis.undefinedTrend")}</span>
-                    <span className="badge-chip">Contexto: {item.context_id || item.batch_id || "-"}</span>
+                    <span className="badge-chip">Empresa: {item.company_name || item.company || "Nao informada"}</span>
+                    <span className="badge-chip">Periodo: {resolveInsightPeriodLabel(item)}</span>
                     <span className="badge-chip">{t("analysis.trigger")}: {item.trigger || t("analysis.manual")}</span>
                     <span className={priorityBadgeClass(item.priority)}>
                       Prioridade: {priorityLabel(item.priority)}
@@ -237,11 +307,11 @@ export default function AnalysisPage() {
               <div className="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <div className="rounded-xl border border-border/70 bg-background/75 p-4">
                   <h3 className="mb-2 text-sm uppercase text-muted-foreground">Empresa</h3>
-                  <p>{item.company || "-"}</p>
+                  <p>{item.company_name || item.company || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-background/75 p-4">
-                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Timestamp</h3>
-                  <p>{item.timestamp || formatDate(item.created_at, settings.locale, t)}</p>
+                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Periodo</h3>
+                  <p>{resolveInsightPeriodLabel(item)}</p>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-background/75 p-4">
                   <h3 className="mb-2 text-sm uppercase text-muted-foreground">Causa raiz</h3>
@@ -294,6 +364,42 @@ export default function AnalysisPage() {
     >
       <div className="mb-5 grid gap-3 rounded-xl border border-border/70 bg-card/80 p-3 text-sm md:grid-cols-3">
         <label className="flex items-center gap-2">
+          <span className="text-muted-foreground">Empresa:</span>
+          <select
+            className="field-input h-9 py-1"
+            value={selectedCompanyId}
+            onChange={(event) => setSelectedCompanyId(event.target.value)}
+          >
+            <option value="">Todas</option>
+            {companies.map((company) => (
+              <option key={company.companyId} value={company.companyId}>
+                {company.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="text-muted-foreground">De:</span>
+          <input
+            type="date"
+            className="field-input h-9 py-1"
+            value={fromDate}
+            onChange={(event) => setFromDate(event.target.value)}
+          />
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="text-muted-foreground">Ate:</span>
+          <input
+            type="date"
+            className="field-input h-9 py-1"
+            value={toDate}
+            onChange={(event) => setToDate(event.target.value)}
+          />
+        </label>
+
+        <label className="flex items-center gap-2">
           <input
             id="show-archived"
             type="checkbox"
@@ -314,6 +420,22 @@ export default function AnalysisPage() {
             <option value="all">Todas</option>
             <option value="high">Alta</option>
             <option value="medium">Média</option>
+            <option value="low">Baixa</option>
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="text-muted-foreground">Urgencia:</span>
+          <select
+            className="field-input h-9 py-1"
+            value={urgencyFilter}
+            onChange={(event) =>
+              setUrgencyFilter(event.target.value as "all" | "high" | "medium" | "low")
+            }
+          >
+            <option value="all">Todas</option>
+            <option value="high">Alta</option>
+            <option value="medium">Media</option>
             <option value="low">Baixa</option>
           </select>
         </label>

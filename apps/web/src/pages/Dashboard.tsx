@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
-import { AppShell } from "@/components/AppShell";
-import { useAppSettings } from "@/contexts/AppSettingsContext";
 import { useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -17,9 +15,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ComposedChart,
-  Legend,
   Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -27,10 +24,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DashboardMetrics, DashboardResponse, Mention, NpsMetrics, sentimentApi } from "@/lib/api";
-import { MentionCard } from "@/components/MentionCard";
+import { AppShell } from "@/components/AppShell";
 import { DataManagementModal } from "@/components/DataManagementModal";
-import { ASPECT_LABELS } from "@/lib/aspectLabels";
+import { MentionCard } from "@/components/MentionCard";
+import { useAppSettings } from "@/contexts/AppSettingsContext";
+import {
+  type AspectMentionsPoint,
+  type CompanyItem,
+  type DashboardMetrics,
+  type DashboardResponse,
+  type Mention,
+  type UrgencyEvolutionPoint,
+  sentimentApi,
+} from "@/lib/api";
 import { getSourceColor, getSourceLabel } from "@/lib/sourceColors";
 
 const COLORS = ["#0f766e", "#ea580c", "#0ea5e9", "#16a34a", "#db2777", "#7c3aed"];
@@ -53,57 +59,63 @@ type StatusBannerState = {
 
 const STATUS_BANNER_STATES: Record<StatusBannerState["level"], Omit<StatusBannerState, "level">> = {
   critical: {
-    label: "Situação Crítica",
-    emoji: "🚨",
+    label: "Situacao Critica",
+    emoji: "CRIT",
     className: "bg-red-600 text-white",
   },
   high: {
-    label: "Atenção Necessária",
-    emoji: "⚠️",
+    label: "Atencao Necessaria",
+    emoji: "ATN",
     className: "bg-orange-500 text-white",
   },
   medium: {
     label: "Monitoramento",
-    emoji: "🟡",
+    emoji: "MED",
     className: "bg-yellow-500 text-black",
   },
   low: {
-    label: "Situação Estável",
-    emoji: "🔵",
+    label: "Situacao Estavel",
+    emoji: "LOW",
     className: "bg-blue-500 text-white",
   },
   ok: {
-    label: "Excelente Reputação",
-    emoji: "✅",
+    label: "Excelente Reputacao",
+    emoji: "OK",
     className: "bg-green-500 text-white",
   },
 };
-
-function mapRecord(record?: Record<string, number>) {
-  return Object.entries(record ?? {})
-    .map(([name, value]) => {
-      const normalized = Number(value);
-      return { name, value: Number.isFinite(normalized) ? normalized : 0 };
-    })
-    .filter((item) => item.value > 0);
-}
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function resolveTopThemes(rawThemes: DashboardMetrics["top_themes"] | undefined): string[] {
-  if (!rawThemes) return [];
+function mapRecord(record?: Record<string, number>) {
+  return Object.entries(record ?? {})
+    .map(([name, value]) => ({ name, value: toFiniteNumber(value, 0) }))
+    .filter((item) => item.value > 0);
+}
 
-  if (Array.isArray(rawThemes)) {
-    return rawThemes.filter(Boolean).slice(0, 3);
-  }
+function mapAspectPoints(points?: AspectMentionsPoint[]) {
+  return (points ?? [])
+    .map((item) => ({
+      label: String(item.label || "").trim(),
+      mentions: Math.max(0, Math.round(toFiniteNumber(item.mentions, 0))),
+    }))
+    .filter((item) => item.label.length > 0 && item.mentions > 0)
+    .sort((a, b) => b.mentions - a.mentions)
+    .slice(0, 10);
+}
 
-  return Object.entries(rawThemes)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([theme]) => theme);
+function mapAspectRecord(record?: Record<string, number>) {
+  return Object.entries(record ?? {})
+    .map(([label, mentions]) => ({
+      label,
+      mentions: Math.max(0, Math.round(toFiniteNumber(mentions, 0))),
+    }))
+    .filter((item) => item.mentions > 0)
+    .sort((a, b) => b.mentions - a.mentions)
+    .slice(0, 10);
 }
 
 function normalizeSource(source: string): string {
@@ -191,21 +203,90 @@ function resolveStatusBanner(score: number, negativeRatio: number): StatusBanner
 function resolveTrend(trend?: string) {
   const normalized = String(trend || "").toLowerCase();
   if (!normalized) {
-    return { symbol: "→", label: "Sem tendência" };
+    return { symbol: "->", label: "Sem tendencia" };
   }
-  if (normalized.includes("up") || normalized.includes("alta") || normalized.includes("growth") || normalized.includes("cresc")) {
-    return { symbol: "↑", label: "Em alta" };
+  if (
+    normalized.includes("up") ||
+    normalized.includes("alta") ||
+    normalized.includes("growth") ||
+    normalized.includes("cresc")
+  ) {
+    return { symbol: "+", label: "Em alta" };
   }
-  if (normalized.includes("down") || normalized.includes("queda") || normalized.includes("drop") || normalized.includes("declin")) {
-    return { symbol: "↓", label: "Em queda" };
+  if (
+    normalized.includes("down") ||
+    normalized.includes("queda") ||
+    normalized.includes("drop") ||
+    normalized.includes("declin")
+  ) {
+    return { symbol: "-", label: "Em queda" };
   }
-  return { symbol: "→", label: "Estável" };
+  return { symbol: "=", label: "Estavel" };
 }
 
 function formatUrgencyDate(rawDate: string): string {
   const parsed = new Date(rawDate);
   if (Number.isNaN(parsed.getTime())) return rawDate;
   return parsed.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+function resolvePeriodLabel(data: DashboardResponse | null): string {
+  if (!data) return "Periodo nao informado";
+  const explicit = String(data.period_label || data.metrics?.period_label || "").trim();
+  if (explicit) return explicit;
+
+  const from = String(data.period_from || data.metrics?.period_from || "").trim();
+  const to = String(data.period_to || data.metrics?.period_to || "").trim();
+  if (from && to) return `${from} - ${to}`;
+  return from || to || "Periodo nao informado";
+}
+
+function resolveCurrentCompanyName(data: DashboardResponse | null, selectedCompany?: CompanyItem | null): string {
+  if (selectedCompany?.name) return selectedCompany.name;
+
+  const directName = String(
+    data?.current_company_name || data?.metrics?.current_company_name || ""
+  ).trim();
+  if (directName) return directName;
+
+  const fromMentions = data?.mentions.find((mention) => String(mention.brand_name || "").trim());
+  if (fromMentions?.brand_name) return fromMentions.brand_name;
+
+  const fromQuery = String(data?.query || "").trim();
+  if (fromQuery) return fromQuery;
+
+  return "Visao geral";
+}
+
+function resolveTopThemes(rawThemes: DashboardMetrics["top_themes"] | undefined): string[] {
+  if (!rawThemes) return [];
+
+  if (Array.isArray(rawThemes)) {
+    return rawThemes.filter(Boolean).slice(0, 3);
+  }
+
+  return Object.entries(rawThemes)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([theme]) => theme);
+}
+
+function resolveAverageUrgency(metrics: Partial<DashboardMetrics>, mentions: Mention[]): number {
+  if (typeof metrics.urgency_score === "number") {
+    return metrics.urgency_score <= 1 ? metrics.urgency_score * 100 : metrics.urgency_score;
+  }
+
+  const urgencyScores = mentions
+    .map((mention) => mention.urgency_score)
+    .filter((value): value is number => typeof value === "number");
+
+  if (urgencyScores.length > 0) {
+    const average = urgencyScores.reduce((acc, current) => acc + current, 0) / urgencyScores.length;
+    return average <= 1 ? average * 100 : average;
+  }
+
+  const fallback = toFiniteNumber(metrics.average_urgency, 0);
+  return fallback <= 1 ? fallback * 100 : fallback;
 }
 
 function SourceDistributionTooltip({
@@ -229,91 +310,116 @@ function SourceDistributionTooltip({
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard() { // NOSONAR
   const { settings, t } = useAppSettings();
   const [, setLocation] = useLocation();
+
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [sourceData, setSourceData] = useState<SourceChartItem[]>([]);
-  const [npsMetrics, setNpsMetrics] = useState<NpsMetrics | null>(null);
+  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
 
-  async function loadDashboard() {
+  async function loadCompanies() {
+    try {
+      const response = await sentimentApi.listCompanies();
+      setCompanies(response.items || []);
+    } catch {
+      setCompanies([]);
+    }
+  }
+
+  async function loadDashboard(companyId = selectedCompanyId) {
     setLoading(true);
     setError("");
+
     try {
-      const dashboardData = await sentimentApi.dashboard();
+      const dashboardData = await sentimentApi.dashboard({
+        company_id: companyId || undefined,
+      });
       setData(dashboardData);
+
       if (dashboardData.search_id) {
         localStorage.setItem(LAST_SEARCH_ID_KEY, dashboardData.search_id);
       }
 
-      const [mentionsData, npsData] = await Promise.all([
-        sentimentApi
-          .mentions({
-            batch_id: dashboardData.batch_id ?? undefined,
-            limit: 1000,
-          })
-          .catch(() => dashboardData.mentions ?? []),
-        sentimentApi.npsMetrics().catch(() => null),
-      ]);
+      const mentionsData = await sentimentApi
+        .mentions({
+          batch_id: dashboardData.batch_id ?? undefined,
+          limit: 1000,
+        })
+        .catch(() => dashboardData.mentions ?? []);
 
-      const mentionSourceData = groupMentionsBySource(mentionsData.length ? mentionsData : dashboardData.mentions ?? []);
+      const mentionSourceData = groupMentionsBySource(
+        mentionsData.length ? mentionsData : dashboardData.mentions ?? []
+      );
       const distributionSourceData = groupSourceDistribution(
         dashboardData.metrics?.source_distribution ?? dashboardData.metrics?.sources_distribution
       );
 
       setSourceData(mentionSourceData.length > 0 ? mentionSourceData : distributionSourceData);
-      setNpsMetrics(npsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.error"));
+      setData(null);
+      setSourceData([]);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadDashboard();
+    void loadCompanies();
   }, []);
+
+  useEffect(() => {
+    void loadDashboard(selectedCompanyId);
+  }, [selectedCompanyId]);
 
   const metrics = data?.metrics ?? {};
   const mentions = data?.mentions ?? [];
+
+  const selectedCompany = useMemo(
+    () => companies.find((company) => company.companyId === selectedCompanyId) ?? null,
+    [companies, selectedCompanyId]
+  );
+
+  const dashboardCompanyName = useMemo(
+    () => resolveCurrentCompanyName(data, selectedCompany),
+    [data, selectedCompany]
+  );
+  const dashboardPeriodLabel = useMemo(() => resolvePeriodLabel(data), [data]);
 
   const sentimentData = useMemo(
     () => mapRecord(metrics.sentiment_distribution),
     [metrics.sentiment_distribution]
   );
-  const aspectData = useMemo(
-    () => mapRecord(metrics.top_aspects).slice(0, 8),
-    [metrics.top_aspects]
+
+  const mostCitedAspectData = useMemo(() => {
+    const listData = mapAspectPoints(metrics.most_cited_aspects);
+    if (listData.length > 0) return listData;
+    return mapAspectRecord(metrics.top_aspects);
+  }, [metrics.most_cited_aspects, metrics.top_aspects]);
+
+  const topNegativeAspectData = useMemo(() => {
+    const listData = mapAspectPoints(metrics.top_negative_aspects_list);
+    if (listData.length > 0) return listData;
+    return mapAspectRecord(metrics.top_negative_aspects);
+  }, [metrics.top_negative_aspects_list, metrics.top_negative_aspects]);
+
+  const urgencyTrend = useMemo<UrgencyEvolutionPoint[]>(
+    () => (metrics.urgency_evolution ?? []).filter((point) => String(point.date || "").trim().length > 0),
+    [metrics.urgency_evolution]
   );
 
   const totalMentions = Math.max(0, Math.round(toFiniteNumber(metrics.total_mentions, mentions.length)));
   const sentimentScore = Math.round(toFiniteNumber(metrics.sentiment_score, metrics.reputation_score ?? 0));
   const reputationScore = Math.round(toFiniteNumber(metrics.reputation_score, sentimentScore));
   const criticalMentions = Math.max(0, Math.round(toFiniteNumber(metrics.critical_mentions, 0)));
-  const topThemes = useMemo(
-    () => resolveTopThemes(metrics.top_themes),
-    [metrics.top_themes]
-  );
-  const averageUrgency = useMemo(() => {
-    if (typeof metrics.urgency_score === "number") {
-      return metrics.urgency_score <= 1 ? metrics.urgency_score * 100 : metrics.urgency_score;
-    }
+  const topThemes = useMemo(() => resolveTopThemes(metrics.top_themes), [metrics.top_themes]);
 
-    const urgencyScores = mentions
-      .map((mention) => mention.urgency_score)
-      .filter((value): value is number => typeof value === "number");
-
-    if (urgencyScores.length > 0) {
-      return urgencyScores.reduce((acc, current) => acc + current, 0) / urgencyScores.length;
-    }
-
-    const fallback = toFiniteNumber(metrics.average_urgency, 0);
-    if (!Number.isFinite(fallback)) return 0;
-    return fallback <= 1 ? fallback * 100 : fallback;
-  }, [mentions, metrics.average_urgency, metrics.urgency_score]);
+  const averageUrgency = useMemo(() => resolveAverageUrgency(metrics, mentions), [metrics, mentions]);
 
   const totalComments = Math.max(
     1,
@@ -323,23 +429,6 @@ export default function Dashboard() {
   const negativeRatio = negativeCount / totalComments;
   const statusBanner = resolveStatusBanner(sentimentScore, negativeRatio);
   const trend = resolveTrend(data?.latest_insight?.trend ?? metrics.trend);
-  const urgencyTrend = useMemo(
-    () => (metrics.urgency_trend ?? []).filter((point) => String(point.date || "").trim().length > 0),
-    [metrics.urgency_trend]
-  );
-  const topNegativeAspectData = useMemo(
-    () =>
-      Object.entries(metrics.top_negative_aspects ?? {})
-        .map(([aspect, count]) => ({
-          aspect,
-          label: ASPECT_LABELS[aspect] ?? aspect,
-          count: Math.max(0, Math.round(toFiniteNumber(count, 0))),
-        }))
-        .filter((item) => item.count > 0)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 8),
-    [metrics.top_negative_aspects]
-  );
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat(settings.locale), [settings.locale]);
 
@@ -358,19 +447,42 @@ export default function Dashboard() {
     <AppShell
       title={t("nav.dashboard")}
       subtitle={
-        data?.batch_id
-          ? t("dashboard.subtitleBatch", { batchId: data.batch_id })
+        data
+          ? `Batch atual: ${dashboardCompanyName} - ${dashboardPeriodLabel}`
           : t("dashboard.subtitleEmpty")
       }
       actions={
         <>
-          <button onClick={() => setIsDataModalOpen(true)} className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30">
+          <div className="min-w-[220px]">
+            <label className="sr-only" htmlFor="dashboard-company-filter">
+              Empresa
+            </label>
+            <select
+              id="dashboard-company-filter"
+              className="field-input h-10 py-2"
+              value={selectedCompanyId}
+              onChange={(event) => setSelectedCompanyId(event.target.value)}
+              aria-label="Filtrar por empresa"
+            >
+              <option value="">Todas as empresas</option>
+              {companies.map((company) => (
+                <option key={company.companyId} value={company.companyId}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => setIsDataModalOpen(true)}
+            className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30"
+          >
             Gerenciar Dados
           </button>
           <button onClick={() => setLocation("/search")} className="secondary-btn">
             {t("dashboard.newSearch")}
           </button>
-          <button onClick={loadDashboard} className="primary-btn">
+          <button onClick={() => void loadDashboard(selectedCompanyId)} className="primary-btn">
             <RefreshCw size={16} />
             <span>{t("common.refresh")}</span>
           </button>
@@ -387,33 +499,52 @@ export default function Dashboard() {
         <div className="app-panel mx-auto max-w-3xl p-10 text-center">
           <SearchIcon className="mx-auto mb-4 h-10 w-10 text-[color:var(--brand)]" />
           <h2 className="text-2xl font-semibold">{t("dashboard.emptyTitle")}</h2>
-          <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
-            {t("dashboard.emptyText")}
-          </p>
+          <p className="mx-auto mt-2 max-w-xl text-muted-foreground">{t("dashboard.emptyText")}</p>
           <button onClick={() => setLocation("/search")} className="primary-btn mx-auto mt-6">
             {t("dashboard.emptyAction")}
           </button>
         </div>
       ) : (
         <>
-          <section className={`sticky top-20 z-30 mb-6 rounded-lg px-4 py-3 text-sm font-semibold shadow-lg ${statusBanner.className}`}>
+          <section
+            className={`sticky top-20 z-30 mb-6 rounded-lg px-4 py-3 text-sm font-semibold shadow-lg ${statusBanner.className}`}
+          >
             <p className="flex items-center gap-2">
               <span aria-hidden="true">{statusBanner.emoji}</span>
               <span>{statusBanner.label}</span>
             </p>
             <p className="mt-1 text-xs opacity-90">
-              Score: {sentimentScore}/100 • Menções negativas: {negativeCount} ({(negativeRatio * 100).toFixed(1)}%)
+              Score: {sentimentScore}/100 - Mencoes negativas: {negativeCount} ({(negativeRatio * 100).toFixed(1)}%)
             </p>
           </section>
 
           <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <MetricCard icon={BarChart3} label={t("dashboard.metricMentions")} value={numberFormatter.format(totalMentions)} />
-            <MetricCard icon={TrendingUp} label={t("dashboard.metricReputation")} value={`${numberFormatter.format(reputationScore)}/100`} />
-            <MetricCard icon={AlertTriangle} label={t("dashboard.metricCritical")} value={numberFormatter.format(criticalMentions)} />
-            <MetricCard icon={Brain} label={t("dashboard.metricUrgency")} value={`${averageUrgency.toFixed(1)}%`} />
-            <MetricCard icon={Brain} label="NPS" value={typeof npsMetrics?.nps_score === "number" ? npsMetrics.nps_score : "-"} />
-            <MetricCard icon={ChartNoAxesCombined} label="Tendência" value={`${trend.symbol} ${trend.label}`} />
-            <MetricCard icon={FileText} label="Top temas" value={topThemes.length > 0 ? topThemes.join(" • ") : "Sem dados"} />
+            <MetricCard
+              icon={BarChart3}
+              label={t("dashboard.metricMentions")}
+              value={numberFormatter.format(totalMentions)}
+            />
+            <MetricCard
+              icon={TrendingUp}
+              label={t("dashboard.metricReputation")}
+              value={`${numberFormatter.format(reputationScore)}/100`}
+            />
+            <MetricCard
+              icon={AlertTriangle}
+              label={t("dashboard.metricCritical")}
+              value={numberFormatter.format(criticalMentions)}
+            />
+            <MetricCard
+              icon={Brain}
+              label={t("dashboard.metricUrgency")}
+              value={`${averageUrgency.toFixed(1)}%`}
+            />
+            <MetricCard icon={ChartNoAxesCombined} label="Tendencia" value={`${trend.symbol} ${trend.label}`} />
+            <MetricCard
+              icon={FileText}
+              label="Top temas"
+              value={topThemes.length > 0 ? topThemes.join(" - ") : "Sem dados"}
+            />
           </section>
 
           <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
@@ -478,28 +609,21 @@ export default function Dashboard() {
 
           <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
             <article className="app-panel p-5 md:p-6">
-              <h2 className="panel-title">Evolução da Urgência</h2>
+              <h2 className="panel-title">Evolucao da Urgencia</h2>
               {urgencyTrend.length === 0 ? (
-                <p className="mt-4 text-sm text-muted-foreground">Sem dados de evolução de urgência para exibir.</p>
+                <p className="mt-4 text-sm text-muted-foreground">Sem dados de evolucao de urgencia para exibir.</p>
               ) : (
                 <div className="h-[260px] mt-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={urgencyTrend}>
+                    <LineChart data={urgencyTrend}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" tickFormatter={formatUrgencyDate} />
-                      <YAxis yAxisId="left" domain={[0, 1]} tickFormatter={(value: number) => `${Math.round(value * 100)}%`} />
-                      <YAxis yAxisId="right" orientation="right" allowDecimals={false} />
+                      <YAxis domain={[0, 1]} tickFormatter={(value: number) => `${Math.round(value * 100)}%`} />
                       <Tooltip
-                        formatter={(value: number | string, name: string) =>
-                          name === "avg_score"
-                            ? [`${Math.round(Number(value) * 100)}%`, "Score médio"]
-                            : [value, "Críticas"]
-                        }
+                        formatter={(value: number | string) => [`${Math.round(Number(value) * 100)}%`, "Urgencia media"]}
                       />
-                      <Legend />
-                      <Bar yAxisId="right" dataKey="critical_count" name="Críticas" fill="#ef4444" opacity={0.7} />
-                      <Line yAxisId="left" type="monotone" dataKey="avg_score" name="Urgência média" stroke="#f97316" strokeWidth={2} dot={false} />
-                    </ComposedChart>
+                      <Line type="monotone" dataKey="avg_urgency" stroke="#f97316" strokeWidth={2} dot={false} />
+                    </LineChart>
                   </ResponsiveContainer>
                 </div>
               )}
@@ -515,9 +639,9 @@ export default function Dashboard() {
                     <BarChart data={topNegativeAspectData} layout="vertical" margin={{ left: 12, right: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                       <XAxis type="number" allowDecimals={false} stroke="var(--muted-foreground)" />
-                      <YAxis type="category" dataKey="label" width={130} stroke="var(--muted-foreground)" />
+                      <YAxis type="category" dataKey="label" width={160} stroke="var(--muted-foreground)" />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#ef4444" radius={[0, 8, 8, 0]} />
+                      <Bar dataKey="mentions" fill="#ef4444" radius={[0, 8, 8, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -527,18 +651,18 @@ export default function Dashboard() {
 
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             <article className="app-panel p-5 md:p-6 xl:col-span-2">
-              <h2 className="panel-title">{t("dashboard.aspects")}</h2>
-              {aspectData.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t("dashboard.noAspects")}</p>
+              <h2 className="panel-title">Aspectos mais citados</h2>
+              {mostCitedAspectData.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem dados de aspectos mais citados.</p>
               ) : (
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={aspectData} layout="vertical" margin={{ left: 24 }}>
+                    <BarChart data={mostCitedAspectData} layout="vertical" margin={{ left: 24 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                       <XAxis type="number" allowDecimals={false} stroke="var(--muted-foreground)" />
-                      <YAxis type="category" dataKey="name" stroke="var(--muted-foreground)" width={110} />
+                      <YAxis type="category" dataKey="label" stroke="var(--muted-foreground)" width={160} />
                       <Tooltip />
-                      <Bar dataKey="value" fill="var(--accent-strong)" radius={[0, 8, 8, 0]} />
+                      <Bar dataKey="mentions" fill="var(--accent-strong)" radius={[0, 8, 8, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -562,7 +686,9 @@ export default function Dashboard() {
       <DataManagementModal
         isOpen={isDataModalOpen}
         onClose={() => setIsDataModalOpen(false)}
-        onDataDeleted={loadDashboard}
+        onDataDeleted={() => {
+          void loadDashboard(selectedCompanyId);
+        }}
       />
     </AppShell>
   );

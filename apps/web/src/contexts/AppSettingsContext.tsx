@@ -1,4 +1,11 @@
-import { getToken, sentimentApi, type AppLocale, type AppTheme, type UserSettings } from "@/lib/api";
+import {
+  AUTH_SESSION_CHANGED_EVENT,
+  getToken,
+  sentimentApi,
+  type AppLocale,
+  type AppTheme,
+  type UserSettings,
+} from "@/lib/api";
 import { translate, type TranslationKey, type TranslationValues } from "@/lib/i18n";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
@@ -83,6 +90,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   const refreshSettings = useCallback(async () => {
     const token = getToken();
     if (!token) {
+      setSettings(loadStoredSettings());
       setLoading(false);
       return;
     }
@@ -104,6 +112,24 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     void refreshSettings();
+  }, [refreshSettings]);
+
+  useEffect(() => {
+    function handleSessionChange() {
+      void refreshSettings();
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange);
+      window.addEventListener("storage", handleSessionChange);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange);
+        window.removeEventListener("storage", handleSessionChange);
+      }
+    };
   }, [refreshSettings]);
 
   const saveSettings = useCallback(

@@ -3,6 +3,7 @@ import { sentimentApi, type ChatMessage, type ChatThread } from "@/lib/api";
 import { useIsMobile } from "@/hooks/useMobile";
 import { MessageSquareText, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AIChatBox, type Message } from "./AIChatBox";
 
 type ThreadOption = {
@@ -49,7 +50,6 @@ export function DomainChatWidget() { // NOSONAR
   const [sending, setSending] = useState(false);
   const [deletingThread, setDeletingThread] = useState(false);
   const [deletingMessage, setDeletingMessage] = useState(false);
-  const [error, setError] = useState("");
   const [threadOptions, setThreadOptions] = useState<ThreadOption[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [backendMessages, setBackendMessages] = useState<ChatMessage[]>([]);
@@ -86,13 +86,12 @@ export function DomainChatWidget() { // NOSONAR
 
   const bootstrap = useCallback(async () => {
     setBooting(true);
-    setError("");
     try {
       const threadId = activeThreadId || (await ensureActiveThread());
       setActiveThreadId(threadId);
       await loadMessages(threadId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("chat.openError"));
+      toast.error(err instanceof Error ? err.message : t("chat.openError"));
     } finally {
       setBooting(false);
     }
@@ -110,7 +109,6 @@ export function DomainChatWidget() { // NOSONAR
       const trimmed = content.trim();
       if (!trimmed) return;
 
-      setError("");
       setSending(true);
 
       try {
@@ -134,7 +132,7 @@ export function DomainChatWidget() { // NOSONAR
           await loadMessages(activeThreadId);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : t("chat.sendError"));
+        toast.error(err instanceof Error ? err.message : t("chat.sendError"));
         if (activeThreadId) {
           try {
             await loadMessages(activeThreadId);
@@ -152,12 +150,11 @@ export function DomainChatWidget() { // NOSONAR
   async function handleThreadChange(nextThreadId: string) {
     if (!nextThreadId) return;
     setActiveThreadId(nextThreadId);
-    setError("");
     setBooting(true);
     try {
       await loadMessages(nextThreadId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("chat.loadError"));
+      toast.error(err instanceof Error ? err.message : t("chat.loadError"));
     } finally {
       setBooting(false);
     }
@@ -165,7 +162,6 @@ export function DomainChatWidget() { // NOSONAR
 
   async function handleCreateThread() {
     setBooting(true);
-    setError("");
     try {
       const created = await sentimentApi.createChatThread();
       const threadId = created.item.thread_id || created.item.id;
@@ -175,7 +171,7 @@ export function DomainChatWidget() { // NOSONAR
       setBackendMessages([]);
       setMessages([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("chat.createError"));
+      toast.error(err instanceof Error ? err.message : t("chat.createError"));
     } finally {
       setBooting(false);
     }
@@ -192,7 +188,6 @@ export function DomainChatWidget() { // NOSONAR
     if (!confirmDelete) return;
 
     setDeletingThread(true);
-    setError("");
 
     try {
       await sentimentApi.deleteChatThread(activeThreadId);
@@ -211,7 +206,7 @@ export function DomainChatWidget() { // NOSONAR
         await handleCreateThread();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("chat.loadError"));
+      toast.error(err instanceof Error ? err.message : t("chat.loadError"));
     } finally {
       setDeletingThread(false);
     }
@@ -234,13 +229,12 @@ export function DomainChatWidget() { // NOSONAR
     if (!confirmDelete) return;
 
     setDeletingMessage(true);
-    setError("");
 
     try {
       await sentimentApi.deleteChatMessage(activeThreadId, messageId);
       await loadMessages(activeThreadId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("chat.loadError"));
+      toast.error(err instanceof Error ? err.message : t("chat.loadError"));
     } finally {
       setDeletingMessage(false);
     }
@@ -338,20 +332,6 @@ export function DomainChatWidget() { // NOSONAR
               <Trash2 size={16} />
             </button>
           </div>
-
-          {error ? (
-            <div className="border-b border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
-              <div className="mb-2">{error}</div>
-              <button
-                className="secondary-btn h-8 px-3 py-1 text-xs"
-                onClick={() => {
-                  ignoreAsync(bootstrap());
-                }}
-              >
-                {settings.locale === "en-US" ? "Retry" : "Tentar novamente"}
-              </button>
-            </div>
-          ) : null}
 
           <AIChatBox
             messages={messages}

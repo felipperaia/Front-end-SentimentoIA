@@ -10,8 +10,10 @@ const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS ||
 export const API_BASE_URL = configuredApiBaseUrl;
 export const AUTH_TOKEN_KEY = "sentimentoia_access_token";
 export const AUTH_USER_KEY = "sentimentoia_user";
+export const AUTH_SESSION_CHANGED_EVENT = "sentimentoia-auth-session-changed";
 const REFRESH_TOKEN_KEY = "sentimentoia_refresh_token";
 const SETTINGS_STORAGE_KEY = "sentimentoia_preferences";
+const THEME_STORAGE_KEY = "theme";
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs)
   ? Math.max(1000, configuredApiTimeoutMs)
   : 90000;
@@ -64,6 +66,22 @@ export type UrgencyTrendPoint = {
   date: string;
   avg_score: number;
   critical_count: number;
+};
+
+export type UrgencyEvolutionPoint = {
+  date: string;
+  avg_urgency: number;
+};
+
+export type AspectMentionsPoint = {
+  label: string;
+  mentions: number;
+};
+
+export type CompanyItem = {
+  companyId: string;
+  name: string;
+  slug: string;
 };
 
 export type NamedCount = {
@@ -589,6 +607,172 @@ function normalizeTopNegativeAspects(value: unknown): Record<string, number> {
   }, {});
 }
 
+function normalizeAspectMentions(value: unknown, aliases: string[]): AspectMentionsPoint[] {
+  const asRecord = normalizeNumericRecord(value);
+  if (Object.keys(asRecord).length > 0) {
+    return Object.entries(asRecord)
+      .map(([label, mentions]) => ({
+        label,
+        mentions: Math.max(0, Math.round(asNumber(mentions, 0))),
+      }))
+      .filter((entry) => entry.mentions > 0)
+      .sort((a, b) => b.mentions - a.mentions);
+  }
+
+  return ensureArray<any>(value)
+    .map((entry) => {
+      const item = ensureObject(entry);
+      const labelCandidate = aliases
+        .map((alias) => item[alias])
+        .find((candidate) => asString(candidate, "") !== "");
+      const label = asString(labelCandidate, "");
+      if (!label) return null;
+
+      const mentions = Math.max(0, Math.round(asNumber(item.mentions ?? item.count ?? item.value ?? item.total, 0)));
+      if (mentions <= 0) return null;
+      return { label, mentions };
+    })
+    .filter((entry): entry is AspectMentionsPoint => entry !== null)
+    .sort((a, b) => b.mentions - a.mentions);
+}
+
+function normalizeUrgencyEvolution(value: unknown): UrgencyEvolutionPoint[] {
+  return ensureArray<any>(value)
+    .map((entry) => {
+      const item = ensureObject(entry);
+      const date = asString(item.date || item.day || item.label, "");
+      if (!date) return null;
+
+      return {
+        date,
+        avg_urgency: normalizeUnitInterval(
+          item.avg_urgency ?? item.avgUrgency ?? item.avg_score ?? item.average_score ?? item.urgency_score
+        ),
+      };
+    })
+    .filter((entry): entry is UrgencyEvolutionPoint => entry !== null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function normalizeCompany(item: unknown): CompanyItem | null {
+  const raw = ensureObject(item);
+  const companyId = asString(raw.companyId || raw.company_id || raw.id || raw._id, "");
+  const name = asString(raw.name || raw.company_name || raw.display_name, "");
+  const slug = asString(raw.slug || raw.company_slug, "");
+
+  if (!companyId || !name) return null;
+  return {
+    companyId,
+    name,
+    slug: slug || companyId,
+  };
+}
+
+function normalizeDateLike(value: unknown): string | undefined {
+  const normalized = asString(value, "");
+  return normalized || undefined;
+}
+
+function resolvePeriodLabel(params: { periodLabel?: unknown; from?: unknown; to?: unknown }): string | undefined {
+  const explicitLabel = asString(params.periodLabel, "");
+  if (explicitLabel) return explicitLabel;
+
+  const from = normalizeDateLike(params.from);
+  const to = normalizeDateLike(params.to);
+  if (!from && !to) return undefined;
+  if (from && to) return `${from} a ${to}`;
+  return from || to;
+}
+
+function normalizeMetricsResponse(rawPayload: unknown): MetricsResponse {
+  const payload = ensureObject(rawPayload);
+  const metrics = ensureObject(payload.metrics);
+  const rootPeriod = ensureObject(payload.period);
+  const metricsPeriod = ensureObject(metrics.period);
+
+  const sentimentDistribution = normalizeNumericRecord(
+    payload.sentiment_distribution || metrics.sentiment_distribution || payload.by_sentiment || metrics.by_sentiment
+  );
+  const topNegativeAspects = normalizeAspectMentions(
+    payload.top_negative_aspects || metrics.top_negative_aspects,
+    ["label", "aspect", "name", "key"]
+  );
+  const topPositiveAspects = normalizeAspectMentions(
+    payload.top_positive_aspects || metrics.top_positive_aspects,
+    ["label", "aspect", "name", "key"]
+  );
+  const mostCitedAspects = normalizeAspectMentions(
+    payload.most_cited_aspects || metrics.most_cited_aspects || payload.top_aspects || metrics.top_aspects,
+    ["label", "aspect", "name", "key"]
+  );
+  const urgencyEvolution = normalizeUrgencyEvolution(
+    payload.urgency_evolution || metrics.urgency_evolution || payload.urgencyEvolution || metrics.urgencyEvolution
+  );
+
+  const periodFrom = normalizeDateLike(
+    payload.period_from || payload.from || rootPeriod.from || metrics.period_from || metrics.from || metricsPeriod.from
+  );
+  const periodTo = normalizeDateLike(
+    payload.period_to || payload.to || rootPeriod.to || metrics.period_to || metrics.to || metricsPeriod.to
+  );
+  const periodLabel = resolvePeriodLabel({
+    periodLabel: payload.period_label || metrics.period_label || rootPeriod.label || metricsPeriod.label,
+    from: periodFrom,
+    to: periodTo,
+  });
+
+  return {
+    company_id: asNullableString(payload.company_id || payload.companyId || metrics.company_id || metrics.companyId),
+    company_name: asNullableString(
+      payload.company_name || payload.current_company_name || payload.company || metrics.company_name || metrics.current_company_name
+    ),
+    company_slug: asNullableString(payload.company_slug || payload.slug || metrics.company_slug),
+    period_label: periodLabel,
+    period_from: periodFrom,
+    period_to: periodTo,
+    total_mentions: Math.max(
+      0,
+      Math.round(asNumber(payload.total_mentions ?? metrics.total_mentions ?? payload.total ?? payload.total_analyzed, 0))
+    ),
+    sentiment_distribution: sentimentDistribution,
+    average_urgency: normalizeUnitInterval(payload.average_urgency ?? metrics.average_urgency ?? payload.avg_urgency_score),
+    urgency_evolution: urgencyEvolution,
+    top_negative_aspects: topNegativeAspects,
+    top_positive_aspects: topPositiveAspects,
+    most_cited_aspects: mostCitedAspects,
+  };
+}
+
+function normalizeReportItem(item: unknown): ReportsListItem | null {
+  const raw = ensureObject(item);
+
+  const companyName =
+    asNullableString(raw.company_name || raw.current_company_name || raw.company || raw.brand_name) || "Empresa";
+  const companyId = asNullableString(raw.company_id || raw.companyId);
+  const companySlug = asNullableString(raw.company_slug || raw.companySlug || raw.slug);
+
+  const periodFrom = normalizeDateLike(raw.period_from || raw.from || raw.period?.from);
+  const periodTo = normalizeDateLike(raw.period_to || raw.to || raw.period?.to);
+  const periodLabel =
+    resolvePeriodLabel({ periodLabel: raw.period_label || raw.period?.label, from: periodFrom, to: periodTo }) ||
+    "Período não informado";
+
+  const id = asString(raw.id || raw.report_id || raw._id || `${companyId || companyName}-${periodLabel}`, "");
+  if (!id) return null;
+
+  return {
+    id,
+    company_id: companyId,
+    company_name: companyName,
+    company_slug: companySlug,
+    period_label: periodLabel,
+    period_from: periodFrom,
+    period_to: periodTo,
+    created_at: asNullableString(raw.created_at),
+    format: asNullableString(raw.format || raw.type),
+  };
+}
+
 function normalizeMention(item: unknown): Mention {
   const raw = ensureObject(item);
   const normalizedConfidence = normalizeUnitInterval(raw.confidence_score ?? raw.confidence ?? 0);
@@ -622,6 +806,9 @@ function normalizeMention(item: unknown): Mention {
 
 function normalizeInsight(item: unknown): InsightItem {
   const raw = ensureObject(item);
+  const rootPeriod = ensureObject(raw.period);
+  const periodFrom = normalizeDateLike(raw.period_from || raw.from || rootPeriod.from);
+  const periodTo = normalizeDateLike(raw.period_to || raw.to || rootPeriod.to);
 
   let avgConfidence: number | undefined;
   const directAvgConfidence = raw.avg_confidence ?? raw.confidence_score;
@@ -653,6 +840,16 @@ function normalizeInsight(item: unknown): InsightItem {
     context_id: asNullableString(raw.context_id),
     context_type: asNullableString(raw.context_type),
     company: asNullableString(raw.company || raw.snapshot?.brand),
+    company_id: asNullableString(raw.company_id || raw.companyId),
+    company_name: asNullableString(raw.company_name || raw.company || raw.snapshot?.brand),
+    company_slug: asNullableString(raw.company_slug || raw.slug),
+    period_label: resolvePeriodLabel({
+      periodLabel: raw.period_label || rootPeriod.label,
+      from: periodFrom,
+      to: periodTo,
+    }),
+    period_from: periodFrom,
+    period_to: periodTo,
     trigger: asNullableString(raw.trigger),
     archived: Boolean(raw.archived),
     priority: asNullableString(raw.priority),
@@ -725,13 +922,27 @@ function normalizeChatMessage(item: unknown): ChatMessage {
 
 function normalizeDashboardMetrics(rawMetrics: unknown, mentions: Mention[] = []): Partial<DashboardMetrics> {
   const raw = ensureObject(rawMetrics);
+  const rootPeriod = ensureObject(raw.period);
   const totalMentions = asNumber(raw.total_mentions, mentions.length);
   const sentimentDistribution = normalizeNumericRecord(raw.sentiment_distribution);
   const sourceDistribution = normalizeNumericRecord(raw.source_distribution || raw.sources_distribution);
   const sourcesDistribution = normalizeNumericRecord(raw.sources_distribution || raw.source_distribution);
   const topAspects = normalizeNumericRecord(raw.top_aspects);
   const urgencyTrend = normalizeUrgencyTrend(raw.urgency_trend);
+  const urgencyEvolution = normalizeUrgencyEvolution(raw.urgency_evolution || raw.urgencyEvolution || raw.urgency_trend);
   const topNegativeAspects = normalizeTopNegativeAspects(raw.top_negative_aspects);
+  const topNegativeAspectsList = normalizeAspectMentions(
+    raw.top_negative_aspects_list || raw.topNegativeAspects || raw.top_negative_aspects,
+    ["label", "name", "aspect", "key"]
+  );
+  const mostCitedAspects = normalizeAspectMentions(
+    raw.most_cited_aspects || raw.mostCitedAspects || raw.top_aspects,
+    ["label", "name", "aspect", "key"]
+  );
+  const topPositiveAspects = normalizeAspectMentions(
+    raw.top_positive_aspects || raw.topPositiveAspects,
+    ["label", "name", "aspect", "key"]
+  );
 
   let topThemes: Record<string, number> | string[] | undefined;
   if (Array.isArray(raw.top_themes)) {
@@ -756,7 +967,21 @@ function normalizeDashboardMetrics(rawMetrics: unknown, mentions: Mention[] = []
     negative_count: raw.negative_count === undefined || raw.negative_count === null ? undefined : asNumber(raw.negative_count, 0),
     trend: asNullableString(raw.trend),
     urgency_trend: urgencyTrend,
+    urgency_evolution: urgencyEvolution,
     top_negative_aspects: topNegativeAspects,
+    top_negative_aspects_list: topNegativeAspectsList,
+    most_cited_aspects: mostCitedAspects,
+    top_positive_aspects: topPositiveAspects,
+    current_company_id: asNullableString(raw.current_company_id || raw.company_id || raw.companyId),
+    current_company_name: asNullableString(raw.current_company_name || raw.company_name || raw.company),
+    current_company_slug: asNullableString(raw.current_company_slug || raw.company_slug || raw.slug),
+    period_label: resolvePeriodLabel({
+      periodLabel: raw.period_label || rootPeriod.label,
+      from: raw.period_from || raw.from || rootPeriod.from,
+      to: raw.period_to || raw.to || rootPeriod.to,
+    }),
+    period_from: normalizeDateLike(raw.period_from || raw.from || rootPeriod.from),
+    period_to: normalizeDateLike(raw.period_to || raw.to || rootPeriod.to),
     recent_mentions: ensureArray<any>(raw.recent_mentions).map(normalizeMention),
   };
 }
@@ -836,12 +1061,34 @@ export function setAuthSession(token: string, user: AuthUser, refreshToken?: str
   if (refreshToken) {
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(AUTH_SESSION_CHANGED_EVENT, {
+        detail: { authenticated: true },
+      })
+    );
+  }
 }
 
 export function clearAuthSession() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(SETTINGS_STORAGE_KEY);
+  localStorage.setItem(THEME_STORAGE_KEY, "light");
+
+  if (typeof document !== "undefined") {
+    document.documentElement.classList.remove("dark");
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(AUTH_SESSION_CHANGED_EVENT, {
+        detail: { authenticated: false },
+      })
+    );
+  }
 }
 
 export function getStoredUser(): AuthUser | null {
@@ -973,6 +1220,20 @@ export const authApi = {
       body: JSON.stringify(payload),
     });
   },
+  async deleteAccount() {
+    try {
+      return await apiFetch<{ ok: boolean; message?: string }>("/api/auth/delete-account", {
+        method: "DELETE",
+      });
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        return apiFetch<{ ok: boolean; message?: string }>("/api/auth/account", {
+          method: "DELETE",
+        });
+      }
+      throw error;
+    }
+  },
   logout() {
     clearAuthSession();
   },
@@ -1019,7 +1280,17 @@ export type DashboardMetrics = {
   negative_count?: number;
   trend?: string;
   urgency_trend?: UrgencyTrendPoint[];
+  urgency_evolution?: UrgencyEvolutionPoint[];
   top_negative_aspects?: Record<string, number>;
+  top_negative_aspects_list?: AspectMentionsPoint[];
+  most_cited_aspects?: AspectMentionsPoint[];
+  top_positive_aspects?: AspectMentionsPoint[];
+  current_company_id?: string;
+  current_company_name?: string;
+  current_company_slug?: string;
+  period_label?: string;
+  period_from?: string;
+  period_to?: string;
   recent_mentions?: Mention[];
 };
 
@@ -1027,6 +1298,12 @@ export type DashboardResponse = {
   search_id: string | null;
   batch_id?: string | null;
   query?: string;
+  current_company_id?: string;
+  current_company_name?: string;
+  current_company_slug?: string;
+  period_label?: string;
+  period_from?: string;
+  period_to?: string;
   metrics: Partial<DashboardMetrics>;
   mentions: Mention[];
   latest_insight?: InsightItem | null;
@@ -1044,6 +1321,12 @@ export type InsightItem = {
   context_id?: string;
   context_type?: string;
   company?: string;
+  company_id?: string;
+  company_name?: string;
+  company_slug?: string;
+  period_label?: string;
+  period_from?: string;
+  period_to?: string;
   trigger?: string;
   archived?: boolean;
   priority?: string;
@@ -1078,8 +1361,56 @@ export type MetricsClassificationResponse = {
   sources_coverage: Array<{ source: string; count: number }>;
 };
 
+export type MetricsResponse = {
+  company_id?: string;
+  company_name?: string;
+  company_slug?: string;
+  period_label?: string;
+  period_from?: string;
+  period_to?: string;
+  total_mentions: number;
+  sentiment_distribution: Record<string, number>;
+  average_urgency: number;
+  urgency_evolution: UrgencyEvolutionPoint[];
+  top_negative_aspects: AspectMentionsPoint[];
+  top_positive_aspects: AspectMentionsPoint[];
+  most_cited_aspects: AspectMentionsPoint[];
+};
+
 export type InsightsResponse = {
   items: InsightItem[];
+};
+
+export type ReportsListItem = {
+  id: string;
+  company_id?: string;
+  company_name: string;
+  company_slug?: string;
+  period_label: string;
+  period_from?: string;
+  period_to?: string;
+  created_at?: string;
+  format?: string;
+};
+
+export type ReportsListResponse = {
+  items: ReportsListItem[];
+  total: number;
+};
+
+export type CookieConsentPreferences = {
+  cookies_estritamente_necessarios: true;
+  cookies_analiticos: boolean;
+  cookies_personalizacao: boolean;
+  cookies_treinamento_ia: boolean;
+};
+
+export type PrivacyConsentPayload = {
+  session_id: string;
+  analytics?: boolean;
+  marketing?: boolean;
+  accepted?: boolean;
+  consent?: CookieConsentPreferences;
 };
 
 export type NpsMetrics = {
@@ -1246,11 +1577,23 @@ function normalizeStatusSummary(value: unknown): ExecutionStatusSummary | undefi
 }
 
 export const sentimentApi = {
-  async dashboard(params?: { batch_id?: string; period_days?: number; limit_mentions?: number }) {
+  async dashboard(params?: {
+    batch_id?: string;
+    period_days?: number;
+    limit_mentions?: number;
+    company_id?: string;
+    company_slug?: string;
+    from?: string;
+    to?: string;
+  }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
     if (params?.period_days) query.set("period_days", String(params.period_days));
     if (params?.limit_mentions) query.set("limit_mentions", String(params.limit_mentions));
+    if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.company_slug) query.set("companySlug", params.company_slug);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
     const suffix = query.toString() ? `?${query.toString()}` : "";
     const raw = await apiFetch<any>(`/api/dashboard${suffix}`);
     const data = ensureObject(raw);
@@ -1268,6 +1611,15 @@ export const sentimentApi = {
       search_id: asNullableString(data.search_id || data.batch_id) ?? null,
       batch_id: asNullableString(data.batch_id || data.search_id) ?? null,
       query: asNullableString(data.query),
+      current_company_id:
+        asNullableString(data.current_company_id || data.company_id || normalizedMetrics.current_company_id),
+      current_company_name:
+        asNullableString(data.current_company_name || data.company_name || normalizedMetrics.current_company_name),
+      current_company_slug:
+        asNullableString(data.current_company_slug || data.company_slug || normalizedMetrics.current_company_slug),
+      period_label: asNullableString(data.period_label || normalizedMetrics.period_label),
+      period_from: asNullableString(data.period_from || normalizedMetrics.period_from),
+      period_to: asNullableString(data.period_to || normalizedMetrics.period_to),
       metrics: normalizedMetrics,
       mentions,
       latest_insight: data.latest_insight ? normalizeInsight(data.latest_insight) : null,
@@ -1402,6 +1754,10 @@ export const sentimentApi = {
     limit?: number;
     priority?: string;
     resolution?: string;
+    urgency?: string;
+    company_id?: string;
+    from?: string;
+    to?: string;
   }) {
     const query = new URLSearchParams();
     if (params?.batch_id) query.set("batch_id", params.batch_id);
@@ -1409,11 +1765,28 @@ export const sentimentApi = {
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.priority) query.set("priority", params.priority);
     if (params?.resolution) query.set("resolution", params.resolution);
+    if (params?.urgency) query.set("urgency", params.urgency);
+    if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
     const suffix = query.toString() ? `?${query.toString()}` : "";
     const raw = await apiFetch<any>(`/api/insights${suffix}`);
     const data = ensureObject(raw);
     return {
       items: ensureArray<any>(data.items).map(normalizeInsight),
+    };
+  },
+  async listCompanies() {
+    const raw = await apiFetch<any>("/api/companies");
+    const data = ensureObject(raw);
+    const rawItems = Array.isArray(raw)
+      ? raw
+      : ensureArray<any>(data.items || data.companies || data.data);
+
+    return {
+      items: rawItems
+        .map((item) => normalizeCompany(item))
+        .filter((item): item is CompanyItem => item !== null),
     };
   },
   async generateInsight(payload?: { batch_id?: string; force?: boolean }) {
@@ -1598,10 +1971,81 @@ export const sentimentApi = {
       sources_coverage: sourcesCoverage,
     };
   },
-  privacyConsent(payload: { session_id: string; analytics: boolean; marketing: boolean }) {
-    return apiFetch<{ ok: boolean }>("/api/privacy/consent", {
+  async metrics(params?: {
+    company_id?: string;
+    company_slug?: string;
+    from?: string;
+    to?: string;
+    period_days?: number;
+  }): Promise<MetricsResponse> {
+    const query = new URLSearchParams();
+    if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.company_slug) query.set("companySlug", params.company_slug);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    if (typeof params?.period_days === "number" && Number.isFinite(params.period_days)) {
+      query.set("periodDays", String(Math.max(1, Math.min(Math.round(params.period_days), 365))));
+    }
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const raw = await apiFetch<any>(`/api/metrics${suffix}`);
+    return normalizeMetricsResponse(raw);
+  },
+  async reports(params?: {
+    company_id?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<ReportsListResponse> {
+    const query = new URLSearchParams();
+    if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    if (typeof params?.limit === "number" && Number.isFinite(params.limit)) {
+      query.set("limit", String(Math.max(1, Math.min(Math.round(params.limit), 500))));
+    }
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const raw = await apiFetch<any>(`/api/reports${suffix}`);
+    const data = ensureObject(raw);
+    const rawItems = Array.isArray(raw)
+      ? raw
+      : ensureArray<any>(data.items || data.reports || data.data);
+
+    const items = rawItems
+      .map((item) => normalizeReportItem(item))
+      .filter((item): item is ReportsListItem => item !== null);
+
+    return {
+      items,
+      total: Math.max(0, Math.round(asNumber(data.total, items.length))),
+    };
+  },
+  seedDemoData(payload: Record<string, unknown>) {
+    return apiFetch<{ ok: boolean; message?: string }>("/api/demo/seed", {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+  privacyConsent(payload: PrivacyConsentPayload) {
+    const preferences = payload.consent;
+    const analytics =
+      payload.analytics ??
+      (preferences ? Boolean(preferences.cookies_analiticos) : false);
+    const marketing =
+      payload.marketing ??
+      (preferences
+        ? Boolean(preferences.cookies_personalizacao || preferences.cookies_treinamento_ia)
+        : false);
+
+    return apiFetch<{ ok: boolean }>("/api/privacy/consent", {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        analytics,
+        marketing,
+        accepted: payload.accepted ?? true,
+      }),
     });
   },
   async integrationsStatus() {
@@ -1664,13 +2108,29 @@ export const sentimentApi = {
 
 export async function downloadReport(
   format: "csv" | "pdf",
-  params?: { source?: string; filename?: string; search_id?: string }
+  params?: {
+    source?: string;
+    filename?: string;
+    search_id?: string;
+    company_id?: string;
+    from?: string;
+    to?: string;
+  }
 ) {
   const query = new URLSearchParams();
   if (params?.search_id) query.set("search_id", params.search_id);
   if (params?.source) query.set("source", params.source);
+  if (params?.company_id) query.set("companyId", params.company_id);
+  if (params?.from) query.set("from", params.from);
+  if (params?.to) query.set("to", params.to);
+
+  const hasCompanyFilter = Boolean(params?.company_id || params?.from || params?.to);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const endpoint = params?.search_id ? `/api/reports/${format}${suffix}` : `/api/reports/export/${format}${suffix}`;
+  const endpoint = hasCompanyFilter
+    ? `/api/reports/export/${format}${suffix}`
+    : params?.search_id
+      ? `/api/reports/${format}${suffix}`
+      : `/api/reports/export/${format}${suffix}`;
   const { blob, filename } = await apiFetchBlob(endpoint);
   const resolvedFilename =
     filename ||

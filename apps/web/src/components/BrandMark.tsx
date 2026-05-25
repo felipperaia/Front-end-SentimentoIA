@@ -12,9 +12,16 @@ export function BrandMark({ className, size = "md" }: BrandMarkProps) {
     lg: "text-2xl",
   }[size];
 
+  const iconClass = {
+    sm: "h-5 w-5",
+    md: "h-6 w-6",
+    lg: "h-8 w-8",
+  }[size];
+
   return (
     <div className={cn("brand-mark", sizeClass, className)}>
-      [Sentimento AI]
+      <img src="/img/logo.svg" alt="" aria-hidden="true" className={iconClass} />
+      <span>[Sentimento AI]</span>
     </div>
   );
 }

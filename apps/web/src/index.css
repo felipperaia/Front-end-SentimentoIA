@@ -217,6 +217,7 @@
   .brand-mark {
     display: inline-flex;
     align-items: center;
+    gap: 0.55rem;
     width: fit-content;
     border: 1px solid color-mix(in oklch, var(--brand) 24%, var(--border));
     border-radius: var(--radius);
@@ -242,6 +243,33 @@
     color: inherit;
     font: inherit;
     outline: none;
+  }
+
+  .language-select-control {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  .language-select-control option,
+  select.field-input option {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  .select-trigger {
+    background-color: var(--background);
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+
+  .select-content {
+    background-color: var(--background);
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+
+  .select-item {
+    color: var(--foreground);
   }
 
   .language-select-compact {
