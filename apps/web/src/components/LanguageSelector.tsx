@@ -8,8 +8,8 @@ type LanguageSelectorProps = {
   compact?: boolean;
 };
 
-export function LanguageSelector({ className, compact = false }: LanguageSelectorProps) {
-  const { settings, setLocalePreference, t } = useAppSettings();
+export function LanguageSelector({ className, compact = false }: Readonly<LanguageSelectorProps>) {
+  const { settings, setLocalePreference: setLocale, t } = useAppSettings();
 
   return (
     <label className={cn("language-select", compact ? "language-select-compact" : "", className)}>
@@ -18,7 +18,7 @@ export function LanguageSelector({ className, compact = false }: LanguageSelecto
       <select
         className="language-select-control"
         value={settings.locale}
-        onChange={(event) => setLocalePreference(event.target.value as AppLocale)}
+        onChange={(event) => setLocale(event.target.value as AppLocale)}
         aria-label={t("common.language")}
       >
         <option value="pt-BR">{compact ? "PT" : t("common.portugueseBrazil")}</option>

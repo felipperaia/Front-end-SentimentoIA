@@ -4,6 +4,8 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
   Brain,
   Clock3,
+  Download,
+  FileText,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -15,6 +17,10 @@ import {
   type InsightItem,
   sentimentApi,
 } from "@/lib/api";
+import { toast } from "sonner";
+
+type PriorityUrgencyFilter = "all" | "high" | "medium" | "low";
+type ResolutionFilter = "all" | "pending" | "in_progress" | "resolved";
 
 function resolveInsightId(item: InsightItem): string {
   return item.insight_id || item.id;
@@ -47,7 +53,7 @@ function resolveInsightDateSortValue(item: InsightItem): number {
 }
 
 function resolveInsightPeriodLabel(item: InsightItem): string {
-  if (item.period_label && item.period_label.trim()) {
+  if (item.period_label?.trim()) {
     return item.period_label;
   }
 
@@ -95,11 +101,12 @@ export default function AnalysisPage() {
   const [items, setItems] = useState<InsightItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [activeExport, setActiveExport] = useState<"pdf" | "csv" | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [priorityFilter, setPriorityFilter] = useState<"all" | "high" | "medium" | "low">("all");
-  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "high" | "medium" | "low">("all");
-  const [resolutionFilter, setResolutionFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityUrgencyFilter>("all");
+  const [urgencyFilter, setUrgencyFilter] = useState<PriorityUrgencyFilter>("all");
+  const [resolutionFilter, setResolutionFilter] = useState<ResolutionFilter>("all");
   const [error, setError] = useState("");
   const [expectedStateMessage, setExpectedStateMessage] = useState("");
 
@@ -207,6 +214,30 @@ export default function AnalysisPage() {
       setError(err instanceof Error ? err.message : t("analysis.actionError"));
     } finally {
       setActiveActionId(null);
+    }
+  }
+
+  async function handleInsightsExport(format: "pdf" | "csv") {
+    setActiveExport(format);
+    try {
+      const exportFilters = {
+        priority: priorityFilter === "all" ? undefined : priorityFilter,
+        resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
+        companyId: selectedCompanyId || undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        limit: 100,
+      };
+
+      if (format === "pdf") {
+        await sentimentApi.exportInsightsPdf(exportFilters);
+      } else {
+        await sentimentApi.exportInsightsCsv(exportFilters);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao exportar insights.");
+    } finally {
+      setActiveExport(null);
     }
   }
 
@@ -353,6 +384,24 @@ export default function AnalysisPage() {
       subtitle={t("analysis.subtitle")}
       actions={
         <>
+          <button
+            onClick={() => {
+              void handleInsightsExport("pdf");
+            }}
+            className="secondary-btn"
+            disabled={activeExport !== null}
+          >
+            <FileText size={16} /> {activeExport === "pdf" ? t("common.processing") : "Exportar PDF"}
+          </button>
+          <button
+            onClick={() => {
+              void handleInsightsExport("csv");
+            }}
+            className="secondary-btn"
+            disabled={activeExport !== null}
+          >
+            <Download size={16} /> {activeExport === "csv" ? t("common.processing") : "Exportar CSV"}
+          </button>
           <button onClick={() => loadInsights()} className="secondary-btn">
             <RefreshCw size={16} /> {t("common.refresh")}
           </button>
@@ -415,7 +464,7 @@ export default function AnalysisPage() {
           <select
             className="field-input h-9 py-1"
             value={priorityFilter}
-            onChange={(event) => setPriorityFilter(event.target.value as "all" | "high" | "medium" | "low")}
+            onChange={(event) => setPriorityFilter(event.target.value as PriorityUrgencyFilter)}
           >
             <option value="all">Todas</option>
             <option value="high">Alta</option>
@@ -430,7 +479,7 @@ export default function AnalysisPage() {
             className="field-input h-9 py-1"
             value={urgencyFilter}
             onChange={(event) =>
-              setUrgencyFilter(event.target.value as "all" | "high" | "medium" | "low")
+              setUrgencyFilter(event.target.value as PriorityUrgencyFilter)
             }
           >
             <option value="all">Todas</option>
@@ -446,7 +495,7 @@ export default function AnalysisPage() {
             className="field-input h-9 py-1"
             value={resolutionFilter}
             onChange={(event) =>
-              setResolutionFilter(event.target.value as "all" | "pending" | "in_progress" | "resolved")
+              setResolutionFilter(event.target.value as ResolutionFilter)
             }
           >
             <option value="all">Todas</option>

@@ -3,7 +3,38 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-    <link rel="icon" type="image/svg+xml" href="/img/favicon.svg" />
+    <link id="favicon" rel="icon" type="image/svg+xml" href="/img/favicon-light.svg" />
+    <script>
+      (function () {
+        var mq = globalThis.matchMedia("(prefers-color-scheme: dark)");
+        var favicon = document.getElementById("favicon");
+        if (!favicon) return;
+
+        function isDocumentDark() {
+          var theme = document.documentElement.dataset.theme;
+          if (theme === "dark") return true;
+          if (theme === "light") return false;
+          return document.documentElement.classList.contains("dark");
+        }
+
+        function updateFavicon(dark) {
+          favicon.href = dark ? "/img/favicon-dark.svg" : "/img/favicon-light.svg";
+        }
+
+        updateFavicon(isDocumentDark() || mq.matches);
+        mq.addEventListener("change", function (e) {
+          updateFavicon(e.matches);
+        });
+
+        var observer = new MutationObserver(function () {
+          updateFavicon(isDocumentDark());
+        });
+        observer.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["data-theme", "class"],
+        });
+      })();
+    </script>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#6366F1" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

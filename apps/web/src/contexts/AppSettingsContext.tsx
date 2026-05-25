@@ -45,12 +45,12 @@ function loadStoredSettings(): UserSettings {
 
     const parsed = JSON.parse(raw) as Partial<UserSettings>;
 
-    const normalizedTheme =
-      storedTheme === "dark" || storedTheme === "light"
-        ? storedTheme
-        : parsed.theme === "dark"
-          ? "dark"
-          : "light";
+    let normalizedTheme: AppTheme;
+    if (storedTheme === "dark" || storedTheme === "light") {
+      normalizedTheme = storedTheme;
+    } else {
+      normalizedTheme = parsed.theme === "dark" ? "dark" : "light";
+    }
 
     return {
       theme: normalizedTheme,
@@ -73,10 +73,11 @@ function applyTheme(theme: AppTheme) {
   localStorage.setItem("theme", theme);
 }
 
-export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
+export function AppSettingsProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const [settings, setSettings] = useState<UserSettings>(() => loadStoredSettings());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(getToken()));
 
   useEffect(() => {
     document.documentElement.lang = settings.locale;
@@ -112,22 +113,23 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     void refreshSettings();
-  }, [refreshSettings]);
+  }, [refreshSettings, isAuthenticated]);
 
   useEffect(() => {
     function handleSessionChange() {
+      setIsAuthenticated(Boolean(getToken()));
       void refreshSettings();
     }
 
-    if (typeof window !== "undefined") {
-      window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange);
-      window.addEventListener("storage", handleSessionChange);
+    if (globalThis.window !== undefined) {
+      globalThis.window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange);
+      globalThis.window.addEventListener("storage", handleSessionChange);
     }
 
     return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange);
-        window.removeEventListener("storage", handleSessionChange);
+      if (globalThis.window !== undefined) {
+        globalThis.window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleSessionChange);
+        globalThis.window.removeEventListener("storage", handleSessionChange);
       }
     };
   }, [refreshSettings]);
@@ -136,7 +138,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     async (partial?: Partial<UserSettings>) => {
       const merged: UserSettings = {
         ...settings,
-        ...(partial || {}),
+        ...partial,
       };
       merged.theme = merged.theme === "dark" ? "dark" : "light";
       merged.locale = merged.locale === "en-US" ? "en-US" : "pt-BR";
@@ -166,13 +168,13 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   const setThemePreference = useCallback((theme: AppTheme) => {
     const normalizedTheme: AppTheme = theme === "dark" ? "dark" : "light";
-    applyTheme(normalizedTheme);
-    setSettings((current) => ({ ...current, theme: normalizedTheme }));
-  }, []);
+    void saveSettings({ theme: normalizedTheme });
+  }, [saveSettings]);
 
   const setLocalePreference = useCallback((locale: AppLocale) => {
-    setSettings((current) => ({ ...current, locale }));
-  }, []);
+    const normalizedLocale: AppLocale = locale === "en-US" ? "en-US" : "pt-BR";
+    void saveSettings({ locale: normalizedLocale });
+  }, [saveSettings]);
 
   const setThresholdPreference = useCallback((value: number) => {
     const normalized = Math.max(1, Number(value || 1));

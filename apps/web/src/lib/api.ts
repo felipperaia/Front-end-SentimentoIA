@@ -1062,8 +1062,8 @@ export function setAuthSession(token: string, user: AuthUser, refreshToken?: str
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   }
 
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
+  if (globalThis.window !== undefined) {
+    globalThis.window.dispatchEvent(
       new CustomEvent(AUTH_SESSION_CHANGED_EVENT, {
         detail: { authenticated: true },
       })
@@ -1082,8 +1082,8 @@ export function clearAuthSession() {
     document.documentElement.classList.remove("dark");
   }
 
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
+  if (globalThis.window !== undefined) {
+    globalThis.window.dispatchEvent(
       new CustomEvent(AUTH_SESSION_CHANGED_EVENT, {
         detail: { authenticated: false },
       })
@@ -1122,6 +1122,28 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   return data as T;
+}
+
+export async function rawFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const response = await requestWithRetry(path, options);
+
+  if (!response.ok) {
+    const data = await parseResponseJson(response);
+    const message = resolveFriendlyErrorMessage({
+      path,
+      status: response.status,
+      detail: data,
+      fallbackKey: "api.requestError",
+    });
+    throw new ApiRequestError(message, {
+      path,
+      status: response.status,
+      code: extractErrorCode(data),
+      data,
+    });
+  }
+
+  return response;
 }
 
 async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string | null }> {
@@ -1577,6 +1599,9 @@ function normalizeStatusSummary(value: unknown): ExecutionStatusSummary | undefi
 }
 
 export const sentimentApi = {
+  rawFetch(path: string, options: RequestInit = {}) {
+    return rawFetch(path, options);
+  },
   async dashboard(params?: {
     batch_id?: string;
     period_days?: number;
@@ -1831,6 +1856,48 @@ export const sentimentApi = {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  },
+  async exportInsightsPdf(params?: {
+    priority?: string;
+    resolution?: string;
+    companyId?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<void> {
+    const query = new URLSearchParams();
+    if (params?.priority) query.set("priority", params.priority);
+    if (params?.resolution) query.set("resolution", params.resolution);
+    if (params?.companyId) query.set("companyId", params.companyId);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const response = await rawFetch(`/api/insights/export/pdf${suffix}`);
+    const blob = await response.blob();
+    triggerBlobDownload(blob, `insights-${new Date().toISOString().slice(0, 10)}.pdf`);
+  },
+  async exportInsightsCsv(params?: {
+    priority?: string;
+    resolution?: string;
+    companyId?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): Promise<void> {
+    const query = new URLSearchParams();
+    if (params?.priority) query.set("priority", params.priority);
+    if (params?.resolution) query.set("resolution", params.resolution);
+    if (params?.companyId) query.set("companyId", params.companyId);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const response = await rawFetch(`/api/insights/export/csv${suffix}`);
+    const blob = await response.blob();
+    triggerBlobDownload(blob, `insights-${new Date().toISOString().slice(0, 10)}.csv`);
   },
   async listChatThreads(limit = 20) {
     const raw = await apiFetch<any>(`/api/chat/threads?limit=${Math.max(1, Math.min(limit, 200))}`);
@@ -2126,11 +2193,10 @@ export async function downloadReport(
 
   const hasCompanyFilter = Boolean(params?.company_id || params?.from || params?.to);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const endpoint = hasCompanyFilter
-    ? `/api/reports/export/${format}${suffix}`
-    : params?.search_id
-      ? `/api/reports/${format}${suffix}`
-      : `/api/reports/export/${format}${suffix}`;
+  let endpoint = `/api/reports/export/${format}${suffix}`;
+  if (!hasCompanyFilter && params?.search_id) {
+    endpoint = `/api/reports/${format}${suffix}`;
+  }
   const { blob, filename } = await apiFetchBlob(endpoint);
   const resolvedFilename =
     filename ||
