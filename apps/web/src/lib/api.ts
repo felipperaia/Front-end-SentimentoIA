@@ -24,9 +24,11 @@ const LOCAL_STORAGE_KEYS_TO_CLEAR = [
   "sentimentoia-theme",
   "sentimentoia-locale",
   "sentimentoia-settings",
+  "sentimentoia-dark",
   "sentimentoia_preferences",
   "sentimentoia_locale",
   "sentimentoia_settings",
+  "locale",
 ] as const;
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs)
   ? Math.max(1000, configuredApiTimeoutMs)
@@ -1092,8 +1094,9 @@ export function clearAuthSession() {
   }
 
   if (typeof document !== "undefined") {
+    document.documentElement.removeAttribute("data-theme");
+    document.documentElement.setAttribute("data-theme", "light");
     document.documentElement.classList.remove("dark");
-    document.documentElement.dataset.theme = "light";
   }
 
   if (globalThis.window !== undefined) {

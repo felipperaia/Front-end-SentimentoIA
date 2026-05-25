@@ -24,6 +24,7 @@ type AppSettingsContextType = {
   setThemePreference: (theme: AppTheme) => void;
   setLocalePreference: (locale: AppLocale) => void;
   setThresholdPreference: (value: number) => void;
+  resetToDefaults: () => void;
   resetSettings: () => void;
   refreshSettings: () => Promise<void>;
   saveSettings: (partial?: Partial<UserSettings>) => Promise<void>;
@@ -65,10 +66,13 @@ export function AppSettingsProvider({ children }: Readonly<{ children: React.Rea
     applyTheme(settings.theme);
   }, [settings.theme]);
 
-  const resetSettings = useCallback(() => {
+  const resetToDefaults = useCallback(() => {
     setSettings(normalizeSettings(DEFAULT_SETTINGS));
+    applyTheme("light");
+    document.documentElement.lang = DEFAULT_LOCALE;
     setLoading(false);
   }, []);
+  const resetSettings = resetToDefaults;
 
   const refreshSettings = useCallback(async () => {
     const token = getToken();
@@ -163,6 +167,7 @@ export function AppSettingsProvider({ children }: Readonly<{ children: React.Rea
       setThemePreference,
       setLocalePreference,
       setThresholdPreference,
+      resetToDefaults,
       resetSettings,
       refreshSettings,
       saveSettings,
@@ -175,6 +180,7 @@ export function AppSettingsProvider({ children }: Readonly<{ children: React.Rea
       setThemePreference,
       setLocalePreference,
       setThresholdPreference,
+      resetToDefaults,
       resetSettings,
       refreshSettings,
       saveSettings,

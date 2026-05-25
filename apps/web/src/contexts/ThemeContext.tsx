@@ -24,15 +24,12 @@ export function ThemeProvider({
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (!switchable) return defaultTheme;
-
-    const stored = localStorage.getItem("theme");
-    return stored === "dark" || stored === "light" ? stored : defaultTheme;
+    return defaultTheme;
   });
 
   const setTheme = switchable
     ? (nextTheme: Theme) => {
         setThemeState(nextTheme);
-        localStorage.setItem("theme", nextTheme);
       }
     : undefined;
 
@@ -40,7 +37,6 @@ export function ThemeProvider({
     ? () => {
         setThemeState((prev) => {
           const next = prev === "light" ? "dark" : "light";
-          localStorage.setItem("theme", next);
           return next;
         });
       }

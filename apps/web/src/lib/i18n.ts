@@ -1,4 +1,4 @@
-import type { AppLocale } from "@/lib/api";
+﻿import type { AppLocale } from "@/lib/api";
 
 type LocaleMap = Record<AppLocale, string>;
 
@@ -14,7 +14,7 @@ export const TRANSLATIONS = {
     "en-US": "[Sentimento AI]",
   },
   "common.productLine": {
-    "pt-BR": "Inteligência de reputação com IA",
+    "pt-BR": "InteligÃªncia de reputaÃ§Ã£o com IA",
     "en-US": "AI reputation intelligence",
   },
   "common.loading": {
@@ -74,7 +74,7 @@ export const TRANSLATIONS = {
     "en-US": "optional",
   },
   "common.notAvailable": {
-    "pt-BR": "Indisponível",
+    "pt-BR": "IndisponÃ­vel",
     "en-US": "Unavailable",
   },
   "common.none": {
@@ -82,7 +82,7 @@ export const TRANSLATIONS = {
     "en-US": "None",
   },
   "common.goHome": {
-    "pt-BR": "Ir para a página inicial",
+    "pt-BR": "Ir para a pÃ¡gina inicial",
     "en-US": "Go home",
   },
   "common.language": {
@@ -90,11 +90,11 @@ export const TRANSLATIONS = {
     "en-US": "Language",
   },
   "common.portugueseBrazil": {
-    "pt-BR": "Português (Brasil)",
+    "pt-BR": "PortuguÃªs (Brasil)",
     "en-US": "Portuguese (Brazil)",
   },
   "common.englishUs": {
-    "pt-BR": "Inglês (EUA)",
+    "pt-BR": "InglÃªs (EUA)",
     "en-US": "English (US)",
   },
   "common.days": {
@@ -102,7 +102,7 @@ export const TRANSLATIONS = {
     "en-US": "{count} days",
   },
   "nav.home": {
-    "pt-BR": "Início",
+    "pt-BR": "InÃ­cio",
     "en-US": "Home",
   },
   "nav.search": {
@@ -118,15 +118,15 @@ export const TRANSLATIONS = {
     "en-US": "Insights",
   },
   "nav.reports": {
-    "pt-BR": "Relatórios",
+    "pt-BR": "RelatÃ³rios",
     "en-US": "Reports",
   },
   "nav.metrics": {
-    "pt-BR": "Métricas",
+    "pt-BR": "MÃ©tricas",
     "en-US": "Metrics",
   },
   "nav.settings": {
-    "pt-BR": "Configurações",
+    "pt-BR": "ConfiguraÃ§Ãµes",
     "en-US": "Settings",
   },
   "nav.login": {
@@ -150,23 +150,23 @@ export const TRANSLATIONS = {
     "en-US": "Starting Sentimento AI...",
   },
   "loading.validatingSession": {
-    "pt-BR": "Validando sessão...",
+    "pt-BR": "Validando sessÃ£o...",
     "en-US": "Validating session...",
   },
   "home.badge": {
-    "pt-BR": "Monitoramento de reputação para times comerciais e executivos",
+    "pt-BR": "Monitoramento de reputaÃ§Ã£o para times comerciais e executivos",
     "en-US": "Reputation monitoring for commercial and executive teams",
   },
   "home.title": {
-    "pt-BR": "Entenda a reputação da sua marca antes que pequenos sinais virem crise.",
+    "pt-BR": "Entenda a reputaÃ§Ã£o da sua marca antes que pequenos sinais virem crise.",
     "en-US": "Understand your brand reputation before small signals become a crisis.",
   },
   "home.subtitle": {
-    "pt-BR": "Colete menções reais, identifique criticidade, gere insights com IA e transforme ruído digital em decisões comerciais claras.",
+    "pt-BR": "Colete menÃ§Ãµes reais, identifique criticidade, gere insights com IA e transforme ruÃ­do digital em decisÃµes comerciais claras.",
     "en-US": "Collect real mentions, identify criticality, generate AI insights, and turn digital noise into clear business decisions.",
   },
   "home.primaryCta": {
-    "pt-BR": "Começar agora",
+    "pt-BR": "ComeÃ§ar agora",
     "en-US": "Get started",
   },
   "home.secondaryCta": {
@@ -178,23 +178,23 @@ export const TRANSLATIONS = {
     "en-US": "Monitored sources",
   },
   "home.metricMentionsValue": {
-    "pt-BR": "Reclame Aqui · Reddit · YouTube · App Store · Google Play · Glassdoor · Trustpilot · Web",
-    "en-US": "Reclame Aqui · Reddit · YouTube · App Store · Google Play · Glassdoor · Trustpilot · Web",
+    "pt-BR": "Reclame Aqui Â· Reddit Â· YouTube Â· App Store Â· Google Play Â· Glassdoor Â· Trustpilot Â· Web",
+    "en-US": "Reclame Aqui Â· Reddit Â· YouTube Â· App Store Â· Google Play Â· Glassdoor Â· Trustpilot Â· Web",
   },
   "home.metricInsights": {
-    "pt-BR": "Insights acionáveis",
+    "pt-BR": "Insights acionÃ¡veis",
     "en-US": "Actionable insights",
   },
   "home.metricReports": {
-    "pt-BR": "Exportação executiva",
+    "pt-BR": "ExportaÃ§Ã£o executiva",
     "en-US": "Executive export",
   },
   "home.dashboardPreviewTitle": {
-    "pt-BR": "Sinais de reputação em tempo real",
+    "pt-BR": "Sinais de reputaÃ§Ã£o em tempo real",
     "en-US": "Real-time reputation signals",
   },
   "home.dashboardPreviewSubtitle": {
-    "pt-BR": "Uma visão unificada de menções, riscos e oportunidades para acelerar respostas.",
+    "pt-BR": "Uma visÃ£o unificada de menÃ§Ãµes, riscos e oportunidades para acelerar respostas.",
     "en-US": "A unified view of mentions, risks, and opportunities to accelerate responses.",
   },
   "home.previewPositive": {
@@ -206,19 +206,19 @@ export const TRANSLATIONS = {
     "en-US": "Neutral",
   },
   "home.previewCritical": {
-    "pt-BR": "Crítico",
+    "pt-BR": "CrÃ­tico",
     "en-US": "Critical",
   },
   "home.previewAction": {
-    "pt-BR": "Ação sugerida",
+    "pt-BR": "AÃ§Ã£o sugerida",
     "en-US": "Suggested action",
   },
   "home.previewActionText": {
-    "pt-BR": "Priorizar respostas públicas e mapear causas recorrentes nas menções negativas.",
+    "pt-BR": "Priorizar respostas pÃºblicas e mapear causas recorrentes nas menÃ§Ãµes negativas.",
     "en-US": "Prioritize public responses and map recurring causes in negative mentions.",
   },
   "home.featuresTitle": {
-    "pt-BR": "Tudo que um time precisa para operar reputação com cadência.",
+    "pt-BR": "Tudo que um time precisa para operar reputaÃ§Ã£o com cadÃªncia.",
     "en-US": "Everything teams need to run reputation with cadence.",
   },
   "home.featureCollectionTitle": {
@@ -234,19 +234,19 @@ export const TRANSLATIONS = {
     "en-US": "Criticality reading",
   },
   "home.featureAiText": {
-    "pt-BR": "Classifique sentimento, urgência, aspectos e próximos passos com apoio da IA.",
+    "pt-BR": "Classifique sentimento, urgÃªncia, aspectos e prÃ³ximos passos com apoio da IA.",
     "en-US": "Classify sentiment, urgency, aspects, and next steps with AI support.",
   },
   "home.featureReportTitle": {
-    "pt-BR": "Relatórios para decisão",
+    "pt-BR": "RelatÃ³rios para decisÃ£o",
     "en-US": "Decision-ready reports",
   },
   "home.featureReportText": {
-    "pt-BR": "Exporte CSV ou PDF para auditoria, reuniões executivas e histórico da marca.",
+    "pt-BR": "Exporte CSV ou PDF para auditoria, reuniÃµes executivas e histÃ³rico da marca.",
     "en-US": "Export CSV or PDF for audits, executive meetings, and brand history.",
   },
   "home.workflowTitle": {
-    "pt-BR": "Do sinal ao plano de ação em minutos.",
+    "pt-BR": "Do sinal ao plano de aÃ§Ã£o em minutos.",
     "en-US": "From signal to action plan in minutes.",
   },
   "home.workflowSearchTitle": {
@@ -254,7 +254,7 @@ export const TRANSLATIONS = {
     "en-US": "1. Search a brand",
   },
   "home.workflowSearchText": {
-    "pt-BR": "Defina fontes, período e localidade para iniciar uma coleta objetiva.",
+    "pt-BR": "Defina fontes, perÃ­odo e localidade para iniciar uma coleta objetiva.",
     "en-US": "Choose sources, period, and location to start a focused collection.",
   },
   "home.workflowAnalyzeTitle": {
@@ -262,7 +262,7 @@ export const TRANSLATIONS = {
     "en-US": "2. Analyze impact",
   },
   "home.workflowAnalyzeText": {
-    "pt-BR": "Veja distribuição de sentimento, tópicos recorrentes e menções recentes.",
+    "pt-BR": "Veja distribuiÃ§Ã£o de sentimento, tÃ³picos recorrentes e menÃ§Ãµes recentes.",
     "en-US": "See sentiment distribution, recurring topics, and recent mentions.",
   },
   "home.workflowActTitle": {
@@ -270,7 +270,7 @@ export const TRANSLATIONS = {
     "en-US": "3. Act with clarity",
   },
   "home.workflowActText": {
-    "pt-BR": "Gere insights, baixe relatórios e alinhe o time com prioridades.",
+    "pt-BR": "Gere insights, baixe relatÃ³rios e alinhe o time com prioridades.",
     "en-US": "Generate insights, download reports, and align the team around priorities.",
   },
   "home.plansTitle": {
@@ -278,7 +278,7 @@ export const TRANSLATIONS = {
     "en-US": "Plans ready to evolve with your team.",
   },
   "home.plansSubtitle": {
-    "pt-BR": "A contratação real de planos será conectada em uma etapa futura do backend. Hoje, estes blocos orientam a proposta comercial.",
+    "pt-BR": "A contrataÃ§Ã£o real de planos serÃ¡ conectada em uma etapa futura do backend. Hoje, estes blocos orientam a proposta comercial.",
     "en-US": "Real plan checkout will be connected in a future backend step. For now, these blocks guide the commercial offer.",
   },
   "home.planStarter": {
@@ -286,7 +286,7 @@ export const TRANSLATIONS = {
     "en-US": "Starter",
   },
   "home.planStarterText": {
-    "pt-BR": "Para primeiras buscas e validação de reputação.",
+    "pt-BR": "Para primeiras buscas e validaÃ§Ã£o de reputaÃ§Ã£o.",
     "en-US": "For initial searches and reputation validation.",
   },
   "home.planGrowth": {
@@ -294,7 +294,7 @@ export const TRANSLATIONS = {
     "en-US": "Growth",
   },
   "home.planGrowthText": {
-    "pt-BR": "Para operação recorrente com relatórios e insights.",
+    "pt-BR": "Para operaÃ§Ã£o recorrente com relatÃ³rios e insights.",
     "en-US": "For recurring operations with reports and insights.",
   },
   "home.planEnterprise": {
@@ -302,11 +302,11 @@ export const TRANSLATIONS = {
     "en-US": "Enterprise",
   },
   "home.planEnterpriseText": {
-    "pt-BR": "Para times que exigem governança, integrações e suporte.",
+    "pt-BR": "Para times que exigem governanÃ§a, integraÃ§Ãµes e suporte.",
     "en-US": "For teams that need governance, integrations, and support.",
   },
   "home.finalCtaTitle": {
-    "pt-BR": "Pronto para transformar reputação em vantagem comercial?",
+    "pt-BR": "Pronto para transformar reputaÃ§Ã£o em vantagem comercial?",
     "en-US": "Ready to turn reputation into commercial advantage?",
   },
   "home.finalCtaText": {
@@ -318,7 +318,7 @@ export const TRANSLATIONS = {
     "en-US": "Log in to the platform",
   },
   "auth.loginSubtitle": {
-    "pt-BR": "Acesse sua operação de reputação e continue de onde parou.",
+    "pt-BR": "Acesse sua operaÃ§Ã£o de reputaÃ§Ã£o e continue de onde parou.",
     "en-US": "Access your reputation operation and pick up where you left off.",
   },
   "auth.loginButton": {
@@ -330,11 +330,11 @@ export const TRANSLATIONS = {
     "en-US": "Signing in...",
   },
   "auth.noAccount": {
-    "pt-BR": "Ainda não tem conta?",
+    "pt-BR": "Ainda nÃ£o tem conta?",
     "en-US": "Do not have an account yet?",
   },
   "auth.hasAccount": {
-    "pt-BR": "Já tem conta?",
+    "pt-BR": "JÃ¡ tem conta?",
     "en-US": "Already have an account?",
   },
   "auth.registerTitle": {
@@ -342,7 +342,7 @@ export const TRANSLATIONS = {
     "en-US": "Create account",
   },
   "auth.registerSubtitle": {
-    "pt-BR": "Configure seu acesso para começar a monitorar reputação.",
+    "pt-BR": "Configure seu acesso para comeÃ§ar a monitorar reputaÃ§Ã£o.",
     "en-US": "Set up your access to start monitoring reputation.",
   },
   "auth.registerButton": {
@@ -386,7 +386,7 @@ export const TRANSLATIONS = {
     "en-US": "Repeat your password",
   },
   "auth.requiredEmailPassword": {
-    "pt-BR": "E-mail e senha são obrigatórios.",
+    "pt-BR": "E-mail e senha sÃ£o obrigatÃ³rios.",
     "en-US": "Email and password are required.",
   },
   "auth.loginError": {
@@ -394,7 +394,7 @@ export const TRANSLATIONS = {
     "en-US": "Unable to log in.",
   },
   "auth.loginMfaRequired": {
-    "pt-BR": "Código MFA necessário para concluir o login.",
+    "pt-BR": "CÃ³digo MFA necessÃ¡rio para concluir o login.",
     "en-US": "MFA code is required to complete sign-in.",
   },
   "auth.forgotPassword": {
@@ -402,7 +402,7 @@ export const TRANSLATIONS = {
     "en-US": "Forgot password?",
   },
   "auth.backHome": {
-    "pt-BR": "Voltar para o início",
+    "pt-BR": "Voltar para o inÃ­cio",
     "en-US": "Back to home",
   },
   "auth.backToLogin": {
@@ -414,15 +414,15 @@ export const TRANSLATIONS = {
     "en-US": "Recover password",
   },
   "auth.forgotSubtitle": {
-    "pt-BR": "Informe seu e-mail para receber o link de redefinição.",
+    "pt-BR": "Informe seu e-mail para receber o link de redefiniÃ§Ã£o.",
     "en-US": "Enter your email to receive a password reset link.",
   },
   "auth.forgotButton": {
-    "pt-BR": "Enviar link de recuperação",
+    "pt-BR": "Enviar link de recuperaÃ§Ã£o",
     "en-US": "Send recovery link",
   },
   "auth.forgotSuccess": {
-    "pt-BR": "E-mail enviado com sucesso. Se o endereço estiver cadastrado, você receberá instruções de recuperação.",
+    "pt-BR": "E-mail enviado com sucesso. Se o endereÃ§o estiver cadastrado, vocÃª receberÃ¡ instruÃ§Ãµes de recuperaÃ§Ã£o.",
     "en-US": "Email sent successfully. If the address exists, you will receive recovery instructions.",
   },
   "auth.resetTitle": {
@@ -442,7 +442,7 @@ export const TRANSLATIONS = {
     "en-US": "Password reset successfully.",
   },
   "auth.resetInvalidToken": {
-    "pt-BR": "Token de recuperação inválido ou ausente.",
+    "pt-BR": "Token de recuperaÃ§Ã£o invÃ¡lido ou ausente.",
     "en-US": "Recovery token is invalid or missing.",
   },
   "auth.newPassword": {
@@ -454,23 +454,23 @@ export const TRANSLATIONS = {
     "en-US": "Confirm new password",
   },
   "auth.nameRequired": {
-    "pt-BR": "Nome é obrigatório.",
+    "pt-BR": "Nome Ã© obrigatÃ³rio.",
     "en-US": "Name is required.",
   },
   "auth.emailInvalid": {
-    "pt-BR": "Informe um e-mail válido.",
+    "pt-BR": "Informe um e-mail vÃ¡lido.",
     "en-US": "Enter a valid email.",
   },
   "auth.phoneRequired": {
-    "pt-BR": "Telefone é obrigatório.",
+    "pt-BR": "Telefone Ã© obrigatÃ³rio.",
     "en-US": "Phone is required.",
   },
   "auth.passwordMin": {
-    "pt-BR": "Use no mínimo 8 caracteres.",
+    "pt-BR": "Use no mÃ­nimo 8 caracteres.",
     "en-US": "Use at least 8 characters.",
   },
   "auth.passwordMismatch": {
-    "pt-BR": "As senhas não coincidem.",
+    "pt-BR": "As senhas nÃ£o coincidem.",
     "en-US": "Passwords do not match.",
   },
   "auth.registerError": {
@@ -478,19 +478,19 @@ export const TRANSLATIONS = {
     "en-US": "Unable to register. Try again.",
   },
   "auth.footer": {
-    "pt-BR": "© 2026 Sentimento AI. Todos os direitos reservados.",
-    "en-US": "© 2026 Sentimento AI. All rights reserved.",
+    "pt-BR": "Â© 2026 Sentimento AI. Todos os direitos reservados.",
+    "en-US": "Â© 2026 Sentimento AI. All rights reserved.",
   },
   "mfa.title": {
-    "pt-BR": "Verificação MFA",
+    "pt-BR": "VerificaÃ§Ã£o MFA",
     "en-US": "MFA verification",
   },
   "mfa.subtitle": {
-    "pt-BR": "Digite o código de 6 dígitos do seu aplicativo autenticador.",
+    "pt-BR": "Digite o cÃ³digo de 6 dÃ­gitos do seu aplicativo autenticador.",
     "en-US": "Enter the 6-digit code from your authenticator app.",
   },
   "mfa.codeLabel": {
-    "pt-BR": "Código autenticador",
+    "pt-BR": "CÃ³digo autenticador",
     "en-US": "Authenticator code",
   },
   "mfa.verify": {
@@ -502,23 +502,23 @@ export const TRANSLATIONS = {
     "en-US": "Verifying...",
   },
   "mfa.success": {
-    "pt-BR": "Verificação bem-sucedida.",
+    "pt-BR": "VerificaÃ§Ã£o bem-sucedida.",
     "en-US": "Verification successful.",
   },
   "mfa.codeLength": {
-    "pt-BR": "O código deve ter 6 dígitos.",
+    "pt-BR": "O cÃ³digo deve ter 6 dÃ­gitos.",
     "en-US": "The code must have 6 digits.",
   },
   "mfa.sessionExpired": {
-    "pt-BR": "Sessão expirada. Faça login novamente.",
+    "pt-BR": "SessÃ£o expirada. FaÃ§a login novamente.",
     "en-US": "Session expired. Please log in again.",
   },
   "mfa.error": {
-    "pt-BR": "Erro ao verificar código.",
+    "pt-BR": "Erro ao verificar cÃ³digo.",
     "en-US": "Unable to verify code.",
   },
   "mfa.help": {
-    "pt-BR": "Use o código atual do autenticador vinculado à sua conta.",
+    "pt-BR": "Use o cÃ³digo atual do autenticador vinculado Ã  sua conta.",
     "en-US": "Use the current code from the authenticator linked to your account.",
   },
   "protected.signInTitle": {
@@ -526,15 +526,15 @@ export const TRANSLATIONS = {
     "en-US": "Sign in to continue",
   },
   "protected.signInText": {
-    "pt-BR": "O dashboard exige autenticação. Faça login para acessar sua operação.",
+    "pt-BR": "O dashboard exige autenticaÃ§Ã£o. FaÃ§a login para acessar sua operaÃ§Ã£o.",
     "en-US": "This dashboard requires authentication. Log in to access your operation.",
   },
   "search.title": {
-    "pt-BR": "Busca de menções",
+    "pt-BR": "Busca de menÃ§Ãµes",
     "en-US": "Mention search",
   },
   "search.subtitle": {
-    "pt-BR": "Colete dados reais de múltiplas fontes para alimentar dashboard, insights e relatórios.",
+    "pt-BR": "Colete dados reais de mÃºltiplas fontes para alimentar dashboard, insights e relatÃ³rios.",
     "en-US": "Collect real data from multiple sources to power dashboards, insights, and reports.",
   },
   "search.goToDashboard": {
@@ -550,7 +550,7 @@ export const TRANSLATIONS = {
     "en-US": "Enter the brand name",
   },
   "search.brandHelp": {
-    "pt-BR": "A coleta utiliza integrações reais, sem preenchimento artificial.",
+    "pt-BR": "A coleta utiliza integraÃ§Ãµes reais, sem preenchimento artificial.",
     "en-US": "Collection uses real integrations, with no artificial filler data.",
   },
   "search.sources": {
@@ -558,27 +558,27 @@ export const TRANSLATIONS = {
     "en-US": "Sources",
   },
   "search.parameters": {
-    "pt-BR": "Parâmetros da busca",
+    "pt-BR": "ParÃ¢metros da busca",
     "en-US": "Search parameters",
   },
   "search.period": {
-    "pt-BR": "Período",
+    "pt-BR": "PerÃ­odo",
     "en-US": "Period",
   },
   "search.last7": {
-    "pt-BR": "Últimos 7 dias",
+    "pt-BR": "Ãšltimos 7 dias",
     "en-US": "Last 7 days",
   },
   "search.last30": {
-    "pt-BR": "Últimos 30 dias",
+    "pt-BR": "Ãšltimos 30 dias",
     "en-US": "Last 30 days",
   },
   "search.last90": {
-    "pt-BR": "Últimos 90 dias",
+    "pt-BR": "Ãšltimos 90 dias",
     "en-US": "Last 90 days",
   },
   "search.lastYear": {
-    "pt-BR": "Último ano",
+    "pt-BR": "Ãšltimo ano",
     "en-US": "Last year",
   },
   "search.locality": {
@@ -586,11 +586,11 @@ export const TRANSLATIONS = {
     "en-US": "Location",
   },
   "search.localityPlaceholder": {
-    "pt-BR": "Brasil, São Paulo",
+    "pt-BR": "Brasil, SÃ£o Paulo",
     "en-US": "United States, New York",
   },
   "search.summary": {
-    "pt-BR": "Resumo da operação",
+    "pt-BR": "Resumo da operaÃ§Ã£o",
     "en-US": "Operation summary",
   },
   "search.summaryBrand": {
@@ -602,7 +602,7 @@ export const TRANSLATIONS = {
     "en-US": "Sources",
   },
   "search.summaryPeriod": {
-    "pt-BR": "Período",
+    "pt-BR": "PerÃ­odo",
     "en-US": "Period",
   },
   "search.start": {
@@ -610,7 +610,7 @@ export const TRANSLATIONS = {
     "en-US": "Start search",
   },
   "search.lastRun": {
-    "pt-BR": "Última execução",
+    "pt-BR": "Ãšltima execuÃ§Ã£o",
     "en-US": "Last run",
   },
   "search.found": {
@@ -630,7 +630,7 @@ export const TRANSLATIONS = {
     "en-US": "Search failed.",
   },
   "search.scrapingMode": {
-    "pt-BR": "Fontes operam via scraping interno com deduplicação incremental no Mongo.",
+    "pt-BR": "Fontes operam via scraping interno com deduplicaÃ§Ã£o incremental no Mongo.",
     "en-US": "Sources run through internal scraping with incremental Mongo deduplication.",
   },
   "search.limitPerSource": {
@@ -666,23 +666,23 @@ export const TRANSLATIONS = {
     "en-US": "Aspect sentiment",
   },
   "mention.confidence": {
-    "pt-BR": "Confiança da IA",
+    "pt-BR": "ConfianÃ§a da IA",
     "en-US": "AI confidence",
   },
   "mention.confidenceHigh": {
-    "pt-BR": "Alta confiança",
+    "pt-BR": "Alta confianÃ§a",
     "en-US": "High confidence",
   },
   "mention.confidenceMedium": {
-    "pt-BR": "Confiança moderada",
+    "pt-BR": "ConfianÃ§a moderada",
     "en-US": "Moderate confidence",
   },
   "mention.confidenceLow": {
-    "pt-BR": "Baixa confiança — revisar",
-    "en-US": "Low confidence — review",
+    "pt-BR": "Baixa confianÃ§a â€” revisar",
+    "en-US": "Low confidence â€” review",
   },
   "urgency.critical": {
-    "pt-BR": "Crítica",
+    "pt-BR": "CrÃ­tica",
     "en-US": "Critical",
   },
   "urgency.high": {
@@ -690,7 +690,7 @@ export const TRANSLATIONS = {
     "en-US": "High",
   },
   "urgency.medium": {
-    "pt-BR": "Média",
+    "pt-BR": "MÃ©dia",
     "en-US": "Medium",
   },
   "urgency.low": {
@@ -702,11 +702,11 @@ export const TRANSLATIONS = {
     "en-US": "Loading dashboard...",
   },
   "metrics.title": {
-    "pt-BR": "Métricas de Classificação",
+    "pt-BR": "MÃ©tricas de ClassificaÃ§Ã£o",
     "en-US": "Classification Metrics",
   },
   "metrics.period": {
-    "pt-BR": "Período",
+    "pt-BR": "PerÃ­odo",
     "en-US": "Period",
   },
   "metrics.totalAnalyzed": {
@@ -714,27 +714,27 @@ export const TRANSLATIONS = {
     "en-US": "Total analyzed",
   },
   "metrics.avgUrgency": {
-    "pt-BR": "Urgência média",
+    "pt-BR": "UrgÃªncia mÃ©dia",
     "en-US": "Average urgency",
   },
   "metrics.avgConfidence": {
-    "pt-BR": "Confiança do modelo",
+    "pt-BR": "ConfianÃ§a do modelo",
     "en-US": "Model confidence",
   },
   "metrics.criticalCount": {
-    "pt-BR": "Menções críticas",
+    "pt-BR": "MenÃ§Ãµes crÃ­ticas",
     "en-US": "Critical mentions",
   },
   "metrics.bySentiment": {
-    "pt-BR": "Distribuição de sentimento",
+    "pt-BR": "DistribuiÃ§Ã£o de sentimento",
     "en-US": "Sentiment distribution",
   },
   "metrics.byCriticality": {
-    "pt-BR": "Distribuição por criticidade",
+    "pt-BR": "DistribuiÃ§Ã£o por criticidade",
     "en-US": "Criticality distribution",
   },
   "metrics.topFactors": {
-    "pt-BR": "Principais fatores de urgência",
+    "pt-BR": "Principais fatores de urgÃªncia",
     "en-US": "Top urgency factors",
   },
   "metrics.topNegativeAspects": {
@@ -750,7 +750,7 @@ export const TRANSLATIONS = {
     "en-US": "Current batch: {batchId}",
   },
   "dashboard.subtitleEmpty": {
-    "pt-BR": "Execute uma busca para preencher indicadores e recomendações da IA.",
+    "pt-BR": "Execute uma busca para preencher indicadores e recomendaÃ§Ãµes da IA.",
     "en-US": "Run a search to populate indicators and AI recommendations.",
   },
   "dashboard.newSearch": {
@@ -766,7 +766,7 @@ export const TRANSLATIONS = {
     "en-US": "No dashboard data",
   },
   "dashboard.emptyText": {
-    "pt-BR": "Inicie uma busca para gerar métricas, gráficos e insights de reputação em tempo real.",
+    "pt-BR": "Inicie uma busca para gerar mÃ©tricas, grÃ¡ficos e insights de reputaÃ§Ã£o em tempo real.",
     "en-US": "Start a search to generate real-time reputation metrics, charts, and insights.",
   },
   "dashboard.emptyAction": {
@@ -774,19 +774,19 @@ export const TRANSLATIONS = {
     "en-US": "Start search",
   },
   "dashboard.metricMentions": {
-    "pt-BR": "Menções",
+    "pt-BR": "MenÃ§Ãµes",
     "en-US": "Mentions",
   },
   "dashboard.metricReputation": {
-    "pt-BR": "Reputação",
+    "pt-BR": "ReputaÃ§Ã£o",
     "en-US": "Reputation",
   },
   "dashboard.metricCritical": {
-    "pt-BR": "Críticas",
+    "pt-BR": "CrÃ­ticas",
     "en-US": "Critical",
   },
   "dashboard.metricUrgency": {
-    "pt-BR": "Urgência média",
+    "pt-BR": "UrgÃªncia mÃ©dia",
     "en-US": "Avg. urgency",
   },
   "dashboard.sentiments": {
@@ -806,7 +806,7 @@ export const TRANSLATIONS = {
     "en-US": "No aspects detected.",
   },
   "dashboard.recentMentions": {
-    "pt-BR": "Menções recentes",
+    "pt-BR": "MenÃ§Ãµes recentes",
     "en-US": "Recent mentions",
   },
   "analysis.title": {
@@ -814,7 +814,7 @@ export const TRANSLATIONS = {
     "en-US": "AI insights",
   },
   "analysis.subtitle": {
-    "pt-BR": "Gestão de insights gerados a partir dos lotes processados no pipeline de menções.",
+    "pt-BR": "GestÃ£o de insights gerados a partir dos lotes processados no pipeline de menÃ§Ãµes.",
     "en-US": "Manage insights generated from batches processed in the mention pipeline.",
   },
   "analysis.generate": {
@@ -842,7 +842,7 @@ export const TRANSLATIONS = {
     "en-US": "Unable to generate insight.",
   },
   "analysis.actionError": {
-    "pt-BR": "Erro ao executar ação no insight.",
+    "pt-BR": "Erro ao executar aÃ§Ã£o no insight.",
     "en-US": "Unable to run insight action.",
   },
   "analysis.emptyTitle": {
@@ -850,7 +850,7 @@ export const TRANSLATIONS = {
     "en-US": "No insights found",
   },
   "analysis.emptyText": {
-    "pt-BR": "Processe menções no pipeline e clique em gerar insight para criar o primeiro.",
+    "pt-BR": "Processe menÃ§Ãµes no pipeline e clique em gerar insight para criar o primeiro.",
     "en-US": "Process mentions in the pipeline and generate the first insight.",
   },
   "analysis.emptyAction": {
@@ -882,11 +882,11 @@ export const TRANSLATIONS = {
     "en-US": "archived",
   },
   "analysis.sentimentOverview": {
-    "pt-BR": "Visão de sentimento",
+    "pt-BR": "VisÃ£o de sentimento",
     "en-US": "Sentiment overview",
   },
   "analysis.noSentimentOverview": {
-    "pt-BR": "Sem visão consolidada.",
+    "pt-BR": "Sem visÃ£o consolidada.",
     "en-US": "No consolidated overview.",
   },
   "analysis.risks": {
@@ -898,23 +898,23 @@ export const TRANSLATIONS = {
     "en-US": "No mapped risks.",
   },
   "analysis.actions": {
-    "pt-BR": "Ações recomendadas",
+    "pt-BR": "AÃ§Ãµes recomendadas",
     "en-US": "Recommended actions",
   },
   "analysis.noActions": {
-    "pt-BR": "Sem ações recomendadas.",
+    "pt-BR": "Sem aÃ§Ãµes recomendadas.",
     "en-US": "No recommended actions.",
   },
   "analysis.guidance": {
-    "pt-BR": "Direcionamento de decisão",
+    "pt-BR": "Direcionamento de decisÃ£o",
     "en-US": "Decision guidance",
   },
   "analysis.confidenceTooltip": {
-    "pt-BR": "Este score indica a certeza média do modelo ao classificar as menções que geraram este insight.",
+    "pt-BR": "Este score indica a certeza mÃ©dia do modelo ao classificar as menÃ§Ãµes que geraram este insight.",
     "en-US": "This score indicates the model's average certainty when classifying mentions that generated this insight.",
   },
   "analysis.noGuidance": {
-    "pt-BR": "Sem direcionamento disponível.",
+    "pt-BR": "Sem direcionamento disponÃ­vel.",
     "en-US": "No guidance available.",
   },
   "analysis.regenerate": {
@@ -930,27 +930,27 @@ export const TRANSLATIONS = {
     "en-US": "Delete",
   },
   "analysis.dateUnavailable": {
-    "pt-BR": "Data indisponível",
+    "pt-BR": "Data indisponÃ­vel",
     "en-US": "Date unavailable",
   },
   "analysis.dateInvalid": {
-    "pt-BR": "Data inválida",
+    "pt-BR": "Data invÃ¡lida",
     "en-US": "Invalid date",
   },
   "reports.title": {
-    "pt-BR": "Relatórios e exportações",
+    "pt-BR": "RelatÃ³rios e exportaÃ§Ãµes",
     "en-US": "Reports and exports",
   },
   "reports.subtitle": {
-    "pt-BR": "Exporte dados consolidados para auditoria, compartilhamento executivo e histórico de reputação.",
+    "pt-BR": "Exporte dados consolidados para auditoria, compartilhamento executivo e histÃ³rico de reputaÃ§Ã£o.",
     "en-US": "Export consolidated data for audits, executive sharing, and reputation history.",
   },
   "reports.csvTitle": {
-    "pt-BR": "Exportação CSV",
+    "pt-BR": "ExportaÃ§Ã£o CSV",
     "en-US": "CSV export",
   },
   "reports.csvText": {
-    "pt-BR": "Arquivo tabular com marca, fonte, sentimento, criticidade, aspectos e texto da menção.",
+    "pt-BR": "Arquivo tabular com marca, fonte, sentimento, criticidade, aspectos e texto da menÃ§Ã£o.",
     "en-US": "Tabular file with brand, source, sentiment, criticality, aspects, and mention text.",
   },
   "reports.csvButton": {
@@ -958,11 +958,11 @@ export const TRANSLATIONS = {
     "en-US": "Download CSV",
   },
   "reports.pdfTitle": {
-    "pt-BR": "Relatório PDF",
+    "pt-BR": "RelatÃ³rio PDF",
     "en-US": "PDF report",
   },
   "reports.pdfText": {
-    "pt-BR": "Resumo executivo com métricas agregadas e lista de menções críticas e recentes.",
+    "pt-BR": "Resumo executivo com mÃ©tricas agregadas e lista de menÃ§Ãµes crÃ­ticas e recentes.",
     "en-US": "Executive summary with aggregated metrics and critical or recent mentions.",
   },
   "reports.pdfButton": {
@@ -970,15 +970,15 @@ export const TRANSLATIONS = {
     "en-US": "Download PDF",
   },
   "reports.error": {
-    "pt-BR": "Erro ao gerar relatório.",
+    "pt-BR": "Erro ao gerar relatÃ³rio.",
     "en-US": "Unable to generate report.",
   },
   "settings.title": {
-    "pt-BR": "Configurações",
+    "pt-BR": "ConfiguraÃ§Ãµes",
     "en-US": "Settings",
   },
   "settings.subtitle": {
-    "pt-BR": "Gerencie perfil, aparência e segurança da conta com salvamento explícito.",
+    "pt-BR": "Gerencie perfil, aparÃªncia e seguranÃ§a da conta com salvamento explÃ­cito.",
     "en-US": "Manage profile, appearance, and account security with explicit save.",
   },
   "settings.theme": {
@@ -990,23 +990,23 @@ export const TRANSLATIONS = {
     "en-US": "Language",
   },
   "settings.threshold": {
-    "pt-BR": "Limiar mínimo da LLM",
+    "pt-BR": "Limiar mÃ­nimo da LLM",
     "en-US": "LLM minimum threshold",
   },
   "settings.save": {
-    "pt-BR": "Salvar configurações",
+    "pt-BR": "Salvar configuraÃ§Ãµes",
     "en-US": "Save settings",
   },
   "settings.saved": {
-    "pt-BR": "Configurações salvas.",
+    "pt-BR": "ConfiguraÃ§Ãµes salvas.",
     "en-US": "Settings saved.",
   },
   "settings.saveError": {
-    "pt-BR": "Falha ao salvar configurações.",
+    "pt-BR": "Falha ao salvar configuraÃ§Ãµes.",
     "en-US": "Unable to save settings.",
   },
   "settings.thresholdHelp": {
-    "pt-BR": "Quantidade mínima de comentários para acionar geração automática de insight por LLM.",
+    "pt-BR": "Quantidade mÃ­nima de comentÃ¡rios para acionar geraÃ§Ã£o automÃ¡tica de insight por LLM.",
     "en-US": "Minimum number of comments required before automatic LLM insight generation.",
   },
   "settings.activeTheme": {
@@ -1022,15 +1022,15 @@ export const TRANSLATIONS = {
     "en-US": "Current threshold",
   },
   "settings.lastUpdate": {
-    "pt-BR": "Última atualização",
+    "pt-BR": "Ãšltima atualizaÃ§Ã£o",
     "en-US": "Last update",
   },
   "settings.mfaTitle": {
-    "pt-BR": "Autenticação multifator (MFA)",
+    "pt-BR": "AutenticaÃ§Ã£o multifator (MFA)",
     "en-US": "Multi-factor authentication (MFA)",
   },
   "settings.mfaSubtitle": {
-    "pt-BR": "Aumente a segurança da conta com código de aplicativo autenticador.",
+    "pt-BR": "Aumente a seguranÃ§a da conta com cÃ³digo de aplicativo autenticador.",
     "en-US": "Increase account security with an authenticator app code.",
   },
   "settings.mfaEnabled": {
@@ -1046,11 +1046,11 @@ export const TRANSLATIONS = {
     "en-US": "Set up MFA",
   },
   "settings.mfaSetupReady": {
-    "pt-BR": "QR Code gerado. Escaneie e confirme com o código de 6 dígitos.",
+    "pt-BR": "QR Code gerado. Escaneie e confirme com o cÃ³digo de 6 dÃ­gitos.",
     "en-US": "QR Code generated. Scan it and confirm with the 6-digit code.",
   },
   "settings.mfaSetupError": {
-    "pt-BR": "Não foi possível iniciar a configuração de MFA.",
+    "pt-BR": "NÃ£o foi possÃ­vel iniciar a configuraÃ§Ã£o de MFA.",
     "en-US": "Unable to start MFA setup.",
   },
   "settings.mfaSetupHelp": {
@@ -1070,7 +1070,7 @@ export const TRANSLATIONS = {
     "en-US": "Enable MFA",
   },
   "settings.mfaEnableError": {
-    "pt-BR": "Não foi possível habilitar o MFA.",
+    "pt-BR": "NÃ£o foi possÃ­vel habilitar o MFA.",
     "en-US": "Unable to enable MFA.",
   },
   "settings.mfaEnabledSuccess": {
@@ -1094,7 +1094,7 @@ export const TRANSLATIONS = {
     "en-US": "Disable MFA",
   },
   "settings.mfaDisableError": {
-    "pt-BR": "Não foi possível desabilitar o MFA.",
+    "pt-BR": "NÃ£o foi possÃ­vel desabilitar o MFA.",
     "en-US": "Unable to disable MFA.",
   },
   "settings.mfaDisabledSuccess": {
@@ -1106,11 +1106,11 @@ export const TRANSLATIONS = {
     "en-US": "Profile",
   },
   "settings.appearanceTab": {
-    "pt-BR": "Aparência",
+    "pt-BR": "AparÃªncia",
     "en-US": "Appearance",
   },
   "settings.securityTab": {
-    "pt-BR": "Segurança",
+    "pt-BR": "SeguranÃ§a",
     "en-US": "Security",
   },
   "settings.mfaTab": {
@@ -1122,23 +1122,23 @@ export const TRANSLATIONS = {
     "en-US": "Edit profile",
   },
   "settings.profileSubtitle": {
-    "pt-BR": "Atualize dados básicos da sua conta. As mudanças só serão aplicadas ao salvar.",
+    "pt-BR": "Atualize dados bÃ¡sicos da sua conta. As mudanÃ§as sÃ³ serÃ£o aplicadas ao salvar.",
     "en-US": "Update basic account data. Changes are applied only after saving.",
   },
   "settings.username": {
-    "pt-BR": "Nome de usuário",
+    "pt-BR": "Nome de usuÃ¡rio",
     "en-US": "Username",
   },
   "settings.emailReadonly": {
-    "pt-BR": "O e-mail é apenas leitura nesta versão.",
+    "pt-BR": "O e-mail Ã© apenas leitura nesta versÃ£o.",
     "en-US": "Email is read-only in this version.",
   },
   "settings.appearanceTitle": {
-    "pt-BR": "Preferências de aparência",
+    "pt-BR": "PreferÃªncias de aparÃªncia",
     "en-US": "Appearance preferences",
   },
   "settings.appearanceSubtitle": {
-    "pt-BR": "Escolha tema e limiar da LLM. Nada é salvo até confirmar.",
+    "pt-BR": "Escolha tema e limiar da LLM. Nada Ã© salvo atÃ© confirmar.",
     "en-US": "Choose theme and LLM threshold. Nothing is saved until confirmed.",
   },
   "settings.darkMode": {
@@ -1170,31 +1170,31 @@ export const TRANSLATIONS = {
     "en-US": "Confirm new password",
   },
   "settings.passwordHelp": {
-    "pt-BR": "Se preencher um campo de senha, preencha os três campos antes de salvar.",
+    "pt-BR": "Se preencher um campo de senha, preencha os trÃªs campos antes de salvar.",
     "en-US": "If you fill one password field, fill all three before saving.",
   },
   "settings.fillAllPasswordFields": {
-    "pt-BR": "Preencha todos os campos de senha para concluir a alteração.",
+    "pt-BR": "Preencha todos os campos de senha para concluir a alteraÃ§Ã£o.",
     "en-US": "Fill all password fields to complete the change.",
   },
   "settings.passwordMismatch": {
-    "pt-BR": "A confirmação da nova senha não confere.",
+    "pt-BR": "A confirmaÃ§Ã£o da nova senha nÃ£o confere.",
     "en-US": "New password confirmation does not match.",
   },
   "settings.unsavedChanges": {
-    "pt-BR": "Existem alterações pendentes. Clique em salvar para aplicar.",
+    "pt-BR": "Existem alteraÃ§Ãµes pendentes. Clique em salvar para aplicar.",
     "en-US": "There are pending changes. Click save to apply.",
   },
   "settings.noPendingChanges": {
-    "pt-BR": "Nenhuma alteração pendente.",
+    "pt-BR": "Nenhuma alteraÃ§Ã£o pendente.",
     "en-US": "No pending changes.",
   },
   "settings.saveAll": {
-    "pt-BR": "Salvar alterações",
+    "pt-BR": "Salvar alteraÃ§Ãµes",
     "en-US": "Save changes",
   },
   "settings.noChanges": {
-    "pt-BR": "Nenhuma alteração para salvar.",
+    "pt-BR": "Nenhuma alteraÃ§Ã£o para salvar.",
     "en-US": "No changes to save.",
   },
   "settings.profileLoadError": {
@@ -1210,16 +1210,16 @@ export const TRANSLATIONS = {
     "en-US": "Dark",
   },
   "chat.title": {
-    "pt-BR": "Assistente do Sistema",
-    "en-US": "System Assistant",
+    "pt-BR": "Assistente de Reputacao",
+    "en-US": "Reputation Assistant",
   },
   "chat.placeholder": {
-    "pt-BR": "Pergunte sobre dashboard, insights, navegação e configurações...",
+    "pt-BR": "Pergunte sobre dashboard, insights, navegaÃ§Ã£o e configuraÃ§Ãµes...",
     "en-US": "Ask about dashboard, insights, navigation, and settings...",
   },
   "chat.domainLocked": {
-    "pt-BR": "Domínio protegido",
-    "en-US": "Domain locked",
+    "pt-BR": "Contexto autorizado",
+    "en-US": "Authorized context",
   },
   "chat.refreshContext": {
     "pt-BR": "Atualizar contexto",
@@ -1254,7 +1254,7 @@ export const TRANSLATIONS = {
     "en-US": "AI chat",
   },
   "chat.promptCritical": {
-    "pt-BR": "Como interpreto as menções críticas?",
+    "pt-BR": "Como interpreto as menÃ§Ãµes crÃ­ticas?",
     "en-US": "How do I read critical mentions?",
   },
   "chat.promptSettings": {
@@ -1262,7 +1262,7 @@ export const TRANSLATIONS = {
     "en-US": "Where can I change language settings?",
   },
   "chat.promptScore": {
-    "pt-BR": "Como o score de reputação é calculado?",
+    "pt-BR": "Como o score de reputaÃ§Ã£o Ã© calculado?",
     "en-US": "How is the reputation score calculated?",
   },
   "chat.emptyState": {
@@ -1270,11 +1270,11 @@ export const TRANSLATIONS = {
     "en-US": "I can help with Sentimento AI features and your authorized account data.",
   },
   "notFound.title": {
-    "pt-BR": "Página não encontrada",
+    "pt-BR": "PÃ¡gina nÃ£o encontrada",
     "en-US": "Page not found",
   },
   "notFound.text": {
-    "pt-BR": "A página que você procura não existe ou foi movida.",
+    "pt-BR": "A pÃ¡gina que vocÃª procura nÃ£o existe ou foi movida.",
     "en-US": "The page you are looking for does not exist or was moved.",
   },
   "errorBoundary.title": {
@@ -1282,23 +1282,23 @@ export const TRANSLATIONS = {
     "en-US": "An unexpected error occurred.",
   },
   "errorBoundary.reload": {
-    "pt-BR": "Recarregar página",
+    "pt-BR": "Recarregar pÃ¡gina",
     "en-US": "Reload page",
   },
   "api.requestError": {
-    "pt-BR": "Erro na requisição",
+    "pt-BR": "Erro na requisiÃ§Ã£o",
     "en-US": "Request failed",
   },
   "api.authExpired": {
-    "pt-BR": "Sua sessão expirou. Faça login novamente.",
+    "pt-BR": "Sua sessÃ£o expirou. FaÃ§a login novamente.",
     "en-US": "Your session has expired. Please sign in again.",
   },
   "api.timeout": {
-    "pt-BR": "A requisição excedeu o tempo limite. Tente novamente.",
+    "pt-BR": "A requisiÃ§Ã£o excedeu o tempo limite. Tente novamente.",
     "en-US": "The request timed out. Please try again.",
   },
   "api.aiUnavailable": {
-    "pt-BR": "A IA está temporariamente indisponível. Tente novamente em instantes.",
+    "pt-BR": "A IA estÃ¡ temporariamente indisponÃ­vel. Tente novamente em instantes.",
     "en-US": "AI is temporarily unavailable. Please try again shortly.",
   },
   "api.aiFallback": {
@@ -1306,11 +1306,11 @@ export const TRANSLATIONS = {
     "en-US": "Unable to complete the AI response right now. Please try again shortly.",
   },
   "api.reportError": {
-    "pt-BR": "Erro ao gerar relatório",
+    "pt-BR": "Erro ao gerar relatÃ³rio",
     "en-US": "Unable to generate report",
   },
   "api.missingBaseUrl": {
-    "pt-BR": "VITE_API_URL não está definido. Configure o endpoint público do backend.",
+    "pt-BR": "VITE_API_URL nÃ£o estÃ¡ definido. Configure o endpoint pÃºblico do backend.",
     "en-US": "VITE_API_URL is not set. Configure the backend public endpoint.",
   },
 } as const satisfies Record<string, LocaleMap>;
@@ -1327,3 +1327,4 @@ export function translate(locale: AppLocale, key: TranslationKey, values?: Trans
     return value === undefined ? match : String(value);
   });
 }
+

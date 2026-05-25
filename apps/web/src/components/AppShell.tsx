@@ -22,10 +22,10 @@ type MenuItem = {
 export function AppShell({ title, subtitle, actions, children }: Readonly<ShellProps>) {
   const [location, setLocation] = useLocation();
   const { logout } = useAuth();
-  const { resetSettings, t } = useAppSettings();
+  const { resetToDefaults, t } = useAppSettings();
 
   async function handleLogout() {
-    resetSettings();
+    resetToDefaults();
     await logout();
   }
 

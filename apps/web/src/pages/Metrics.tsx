@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
   BarChart,
@@ -15,9 +16,15 @@ import {
 } from "recharts";
 import { RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
-  type CompanyItem,
   type MetricsResponse,
   sentimentApi,
 } from "@/lib/api";
@@ -58,8 +65,13 @@ function formatUrgencyDate(rawDate: string): string {
 export default function MetricsPage() {
   const { t } = useAppSettings();
 
-  const [companies, setCompanies] = useState<CompanyItem[]>([]);
   const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
+  const { data: companiesData } = useQuery({
+    queryKey: ["companies"],
+    queryFn: sentimentApi.listCompanies,
+    staleTime: 5 * 60 * 1000,
+  });
+  const companies = companiesData ?? [];
   const [periodPreset, setPeriodPreset] = useState<"7" | "30" | "90" | "custom">("30");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -68,14 +80,6 @@ export default function MetricsPage() {
   const [error, setError] = useState("");
   const [data, setData] = useState<MetricsResponse | null>(null);
 
-  async function loadCompanies() {
-    try {
-      const response = await sentimentApi.listCompanies();
-      setCompanies(response || []);
-    } catch {
-      setCompanies([]);
-    }
-  }
 
   async function loadMetrics() {
     setLoading(true);
@@ -110,9 +114,6 @@ export default function MetricsPage() {
     }
   }
 
-  useEffect(() => {
-    void loadCompanies();
-  }, []);
 
   useEffect(() => {
     if (periodPreset !== "custom") {
@@ -181,18 +182,19 @@ export default function MetricsPage() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Empresa:</span>
-            <select
-              className="field-input h-10 py-2"
-              value={selectedCompanySlug}
-              onChange={(event) => setSelectedCompanySlug(event.target.value)}
-            >
-              <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
-              {companies.map((company) => (
-                <option key={company.slug} value={company.slug}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedCompanySlug} onValueChange={setSelectedCompanySlug}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Filtrar por empresa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
+                {companies.map((company) => (
+                  <SelectItem key={company.slug} value={company.slug}>
+                    {company.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
 
           <label className="flex items-center gap-2">
@@ -378,3 +380,5 @@ export default function MetricsPage() {
     </AppShell>
   );
 }
+
+

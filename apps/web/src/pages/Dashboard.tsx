@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -27,6 +28,13 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { DataManagementModal } from "@/components/DataManagementModal";
 import { MentionCard } from "@/components/MentionCard";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
   type AspectMentionsPoint,
@@ -317,20 +325,16 @@ export default function Dashboard() { // NOSONAR
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [sourceData, setSourceData] = useState<SourceChartItem[]>([]);
-  const [companies, setCompanies] = useState<CompanyItem[]>([]);
   const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
+  const { data: companiesData } = useQuery({
+    queryKey: ["companies"],
+    queryFn: sentimentApi.listCompanies,
+    staleTime: 5 * 60 * 1000,
+  });
+  const companies = companiesData ?? [];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
-
-  async function loadCompanies() {
-    try {
-      const response = await sentimentApi.listCompanies();
-      setCompanies(response || []);
-    } catch {
-      setCompanies([]);
-    }
-  }
 
   async function loadDashboard(companySlug = selectedCompanySlug) {
     setLoading(true);
@@ -369,10 +373,6 @@ export default function Dashboard() { // NOSONAR
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    void loadCompanies();
-  }, []);
 
   useEffect(() => {
     void loadDashboard(selectedCompanySlug);
@@ -454,25 +454,19 @@ export default function Dashboard() { // NOSONAR
       }
       actions={
         <>
-          <div className="min-w-[220px]">
-            <label className="sr-only" htmlFor="dashboard-company-filter">
-              Empresa
-            </label>
-            <select
-              id="dashboard-company-filter"
-              className="field-input h-10 py-2"
-              value={selectedCompanySlug}
-              onChange={(event) => setSelectedCompanySlug(event.target.value)}
-              aria-label="Filtrar por empresa"
-            >
-              <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
+          <Select value={selectedCompanySlug} onValueChange={setSelectedCompanySlug}>
+            <SelectTrigger className="w-[220px]" aria-label="Filtrar por empresa">
+              <SelectValue placeholder="Filtrar por empresa" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
               {companies.map((company) => (
-                <option key={company.slug} value={company.slug}>
+                <SelectItem key={company.slug} value={company.slug}>
                   {company.name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
-          </div>
+            </SelectContent>
+          </Select>
 
           <button
             onClick={() => setIsDataModalOpen(true)}

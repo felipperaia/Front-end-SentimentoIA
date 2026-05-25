@@ -1,11 +1,18 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Download, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
   downloadReport,
-  type CompanyItem,
   type ReportsListItem,
   sentimentApi,
 } from "@/lib/api";
@@ -16,8 +23,13 @@ const ALL_COMPANIES_VALUE = "all";
 export default function ReportsPage() {
   const { t } = useAppSettings();
 
-  const [companies, setCompanies] = useState<CompanyItem[]>([]);
   const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
+  const { data: companiesData } = useQuery({
+    queryKey: ["companies"],
+    queryFn: sentimentApi.listCompanies,
+    staleTime: 5 * 60 * 1000,
+  });
+  const companies = companiesData ?? [];
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [limit, setLimit] = useState(100);
@@ -27,14 +39,6 @@ export default function ReportsPage() {
   const [error, setError] = useState("");
   const [activeExport, setActiveExport] = useState<ExportAction | null>(null);
 
-  async function loadCompanies() {
-    try {
-      const response = await sentimentApi.listCompanies();
-      setCompanies(response || []);
-    } catch {
-      setCompanies([]);
-    }
-  }
 
   async function loadReports() {
     setLoading(true);
@@ -72,9 +76,6 @@ export default function ReportsPage() {
     }
   }
 
-  useEffect(() => {
-    void loadCompanies();
-  }, []);
 
   useEffect(() => {
     void loadReports();
@@ -142,18 +143,19 @@ export default function ReportsPage() {
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="flex items-center gap-2">
             <span className="text-muted-foreground">Empresa:</span>
-            <select
-              className="field-input h-9 py-1"
-              value={selectedCompanySlug}
-              onChange={(event) => setSelectedCompanySlug(event.target.value)}
-            >
-              <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
-              {companies.map((company) => (
-                <option key={company.slug} value={company.slug}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedCompanySlug} onValueChange={setSelectedCompanySlug}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Filtrar por empresa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
+                {companies.map((company) => (
+                  <SelectItem key={company.slug} value={company.slug}>
+                    {company.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
 
           <label className="flex items-center gap-2">
@@ -227,3 +229,5 @@ export default function ReportsPage() {
     </AppShell>
   );
 }
+
+

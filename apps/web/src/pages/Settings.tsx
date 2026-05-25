@@ -64,7 +64,7 @@ function usernameFromEmail(email: string) {
 }
 
 export default function SettingsPage() {
-  const { resetSettings, settings, loading, saving, refreshSettings, saveSettings, t } = useAppSettings();
+  const { resetToDefaults, settings, loading, saving, refreshSettings, saveSettings, t } = useAppSettings();
 
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>({
     name: "",
@@ -326,7 +326,7 @@ export default function SettingsPage() {
     setDeleteBusy(true);
     try {
       await authApi.deleteAccount();
-      resetSettings();
+      resetToDefaults();
       await authApi.logout();
       toast.success("Conta encerrada com sucesso.");
       globalThis.location.href = "/";
@@ -365,6 +365,28 @@ export default function SettingsPage() {
         <p className="mt-3 text-sm text-muted-foreground">
           {hasUnsavedChanges ? t("settings.unsavedChanges") : t("settings.noPendingChanges")}
         </p>
+      </section>
+
+      <section className="mb-5 app-panel p-6">
+        <h3 className="text-lg font-semibold">{t("common.status")}</h3>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <dt className="text-muted-foreground">{t("settings.activeTheme")}</dt>
+            <dd className="font-medium">{themeDraft === "dark" ? t("theme.dark") : t("theme.light")}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t("settings.currentThreshold")}</dt>
+            <dd className="font-medium">{thresholdDraft}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t("settings.lastUpdate")}</dt>
+            <dd className="font-medium">{updatedAt}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t("settings.username")}</dt>
+            <dd className="font-medium">{profileDraft.username || "-"}</dd>
+          </div>
+        </dl>
       </section>
 
       <section id="profile" className="mb-5 app-panel p-6 md:p-7">
@@ -700,28 +722,7 @@ export default function SettingsPage() {
           </AlertDialog>
         </div>
       </section>
-
-      <section className="mt-5 app-panel p-6">
-        <h3 className="text-lg font-semibold">{t("common.status")}</h3>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-          <div>
-            <dt className="text-muted-foreground">{t("settings.activeTheme")}</dt>
-            <dd className="font-medium">{themeDraft === "dark" ? t("theme.dark") : t("theme.light")}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">{t("settings.currentThreshold")}</dt>
-            <dd className="font-medium">{thresholdDraft}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">{t("settings.lastUpdate")}</dt>
-            <dd className="font-medium">{updatedAt}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">{t("settings.username")}</dt>
-            <dd className="font-medium">{profileDraft.username || "-"}</dd>
-          </div>
-        </dl>
-      </section>
     </AppShell>
   );
 }
+

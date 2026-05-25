@@ -1,5 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
   Brain,
@@ -13,7 +21,6 @@ import {
 } from "lucide-react";
 import {
   ApiRequestError,
-  type CompanyItem,
   type InsightItem,
   sentimentApi,
 } from "@/lib/api";
@@ -95,8 +102,13 @@ function resolveConfidenceBadge(confidence: number, t: ReturnType<typeof useAppS
 
 export default function AnalysisPage() {
   const { settings, t } = useAppSettings();
-  const [companies, setCompanies] = useState<CompanyItem[]>([]);
   const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
+  const { data: companiesData } = useQuery({
+    queryKey: ["companies"],
+    queryFn: sentimentApi.listCompanies,
+    staleTime: 5 * 60 * 1000,
+  });
+  const companies = companiesData ?? [];
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [items, setItems] = useState<InsightItem[]>([]);
@@ -110,27 +122,6 @@ export default function AnalysisPage() {
   const [resolutionFilter, setResolutionFilter] = useState<ResolutionFilter>("all");
   const [error, setError] = useState("");
   const [expectedStateMessage, setExpectedStateMessage] = useState("");
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadCompanies() {
-      try {
-        const response = await sentimentApi.listCompanies();
-        if (!active) return;
-        setCompanies(response || []);
-      } catch {
-        if (!active) return;
-        setCompanies([]);
-      }
-    }
-
-    void loadCompanies();
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   async function loadInsights(include = includeArchived) {
     setLoading(true);
@@ -415,18 +406,19 @@ export default function AnalysisPage() {
       <div className="mb-5 grid gap-3 rounded-xl border border-border/70 bg-card/80 p-3 text-sm md:grid-cols-3">
         <label className="flex items-center gap-2">
           <span className="text-muted-foreground">Empresa:</span>
-          <select
-            className="field-input h-9 py-1"
-            value={selectedCompanySlug}
-            onChange={(event) => setSelectedCompanySlug(event.target.value)}
-          >
-            <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
-            {companies.map((company) => (
-              <option key={company.slug} value={company.slug}>
-                {company.name}
-              </option>
-            ))}
-          </select>
+          <Select value={selectedCompanySlug} onValueChange={setSelectedCompanySlug}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Filtrar por empresa" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
+              {companies.map((company) => (
+                <SelectItem key={company.slug} value={company.slug}>
+                  {company.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         <label className="flex items-center gap-2">

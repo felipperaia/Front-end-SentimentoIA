@@ -104,7 +104,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
-  const { resetSettings, t } = useAppSettings();
+  const { resetToDefaults, t } = useAppSettings();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -225,7 +225,7 @@ function DashboardLayoutContent({
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
                   onClick={() => {
-                    resetSettings();
+                    resetToDefaults();
                     void logout();
                   }}
                   className="cursor-pointer text-destructive focus:text-destructive"
