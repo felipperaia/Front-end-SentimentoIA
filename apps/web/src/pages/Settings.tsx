@@ -64,7 +64,7 @@ function usernameFromEmail(email: string) {
 }
 
 export default function SettingsPage() {
-  const { settings, loading, saving, refreshSettings, saveSettings, t } = useAppSettings();
+  const { resetSettings, settings, loading, saving, refreshSettings, saveSettings, t } = useAppSettings();
 
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>({
     name: "",
@@ -326,7 +326,8 @@ export default function SettingsPage() {
     setDeleteBusy(true);
     try {
       await authApi.deleteAccount();
-      authApi.logout();
+      resetSettings();
+      await authApi.logout();
       toast.success("Conta encerrada com sucesso.");
       globalThis.location.href = "/";
     } catch (err) {

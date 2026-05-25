@@ -14,6 +14,20 @@ export const AUTH_SESSION_CHANGED_EVENT = "sentimentoia-auth-session-changed";
 const REFRESH_TOKEN_KEY = "sentimentoia_refresh_token";
 const SETTINGS_STORAGE_KEY = "sentimentoia_preferences";
 const THEME_STORAGE_KEY = "theme";
+const LOCAL_STORAGE_KEYS_TO_CLEAR = [
+  AUTH_TOKEN_KEY,
+  AUTH_USER_KEY,
+  REFRESH_TOKEN_KEY,
+  SETTINGS_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  "sentimentoia-preferences",
+  "sentimentoia-theme",
+  "sentimentoia-locale",
+  "sentimentoia-settings",
+  "sentimentoia_preferences",
+  "sentimentoia_locale",
+  "sentimentoia_settings",
+] as const;
 const API_TIMEOUT_MS = Number.isFinite(configuredApiTimeoutMs)
   ? Math.max(1000, configuredApiTimeoutMs)
   : 90000;
@@ -79,7 +93,7 @@ export type AspectMentionsPoint = {
 };
 
 export type CompanyItem = {
-  companyId: string;
+  company_id: string;
   name: string;
   slug: string;
 };
@@ -100,13 +114,8 @@ export type UserSettings = {
 };
 
 function getCurrentLocale(): AppLocale {
-  if (typeof localStorage === "undefined") return "pt-BR";
-  try {
-    const parsed = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}") as Partial<UserSettings>;
-    return parsed.locale === "en-US" ? "en-US" : "pt-BR";
-  } catch {
-    return "pt-BR";
-  }
+  if (typeof document === "undefined") return "pt-BR";
+  return document.documentElement.lang === "en-US" ? "en-US" : "pt-BR";
 }
 
 function tApi(key: TranslationKey) {
@@ -662,7 +671,7 @@ function normalizeCompany(item: unknown): CompanyItem | null {
 
   if (!companyId || !name) return null;
   return {
-    companyId,
+    company_id: companyId,
     name,
     slug: slug || companyId,
   };
@@ -1072,14 +1081,19 @@ export function setAuthSession(token: string, user: AuthUser, refreshToken?: str
 }
 
 export function clearAuthSession() {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_USER_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(SETTINGS_STORAGE_KEY);
-  localStorage.setItem(THEME_STORAGE_KEY, "light");
+  for (const storageKey of LOCAL_STORAGE_KEYS_TO_CLEAR) {
+    localStorage.removeItem(storageKey);
+  }
+
+  if (typeof sessionStorage !== "undefined") {
+    for (const storageKey of LOCAL_STORAGE_KEYS_TO_CLEAR) {
+      sessionStorage.removeItem(storageKey);
+    }
+  }
 
   if (typeof document !== "undefined") {
     document.documentElement.classList.remove("dark");
+    document.documentElement.dataset.theme = "light";
   }
 
   if (globalThis.window !== undefined) {
@@ -1256,8 +1270,16 @@ export const authApi = {
       throw error;
     }
   },
-  logout() {
-    clearAuthSession();
+  async logout() {
+    try {
+      await apiFetch<{ status?: string; clear_preferences?: boolean }>("/api/auth/logout", {
+        method: "POST",
+      });
+    } catch {
+      // Keep logout idempotent on the client even when backend session is already invalid.
+    } finally {
+      clearAuthSession();
+    }
   },
 };
 
@@ -1781,6 +1803,7 @@ export const sentimentApi = {
     resolution?: string;
     urgency?: string;
     company_id?: string;
+    company_slug?: string;
     from?: string;
     to?: string;
   }) {
@@ -1792,6 +1815,7 @@ export const sentimentApi = {
     if (params?.resolution) query.set("resolution", params.resolution);
     if (params?.urgency) query.set("urgency", params.urgency);
     if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.company_slug) query.set("companySlug", params.company_slug);
     if (params?.from) query.set("from", params.from);
     if (params?.to) query.set("to", params.to);
     const suffix = query.toString() ? `?${query.toString()}` : "";
@@ -1801,18 +1825,16 @@ export const sentimentApi = {
       items: ensureArray<any>(data.items).map(normalizeInsight),
     };
   },
-  async listCompanies() {
+  async listCompanies(): Promise<CompanyItem[]> {
     const raw = await apiFetch<any>("/api/companies");
     const data = ensureObject(raw);
     const rawItems = Array.isArray(raw)
       ? raw
       : ensureArray<any>(data.items || data.companies || data.data);
 
-    return {
-      items: rawItems
-        .map((item) => normalizeCompany(item))
-        .filter((item): item is CompanyItem => item !== null),
-    };
+    return rawItems
+      .map((item) => normalizeCompany(item))
+      .filter((item): item is CompanyItem => item !== null);
   },
   async generateInsight(payload?: { batch_id?: string; force?: boolean }) {
     const raw = await apiFetch<any>("/api/insights/generate", {
@@ -1861,6 +1883,7 @@ export const sentimentApi = {
     priority?: string;
     resolution?: string;
     companyId?: string;
+    companySlug?: string;
     from?: string;
     to?: string;
     limit?: number;
@@ -1868,7 +1891,8 @@ export const sentimentApi = {
     const query = new URLSearchParams();
     if (params?.priority) query.set("priority", params.priority);
     if (params?.resolution) query.set("resolution", params.resolution);
-    if (params?.companyId) query.set("companyId", params.companyId);
+    if (params?.companySlug) query.set("companySlug", params.companySlug);
+    else if (params?.companyId) query.set("companyId", params.companyId);
     if (params?.from) query.set("from", params.from);
     if (params?.to) query.set("to", params.to);
     if (params?.limit) query.set("limit", String(params.limit));
@@ -1882,6 +1906,7 @@ export const sentimentApi = {
     priority?: string;
     resolution?: string;
     companyId?: string;
+    companySlug?: string;
     from?: string;
     to?: string;
     limit?: number;
@@ -1889,7 +1914,8 @@ export const sentimentApi = {
     const query = new URLSearchParams();
     if (params?.priority) query.set("priority", params.priority);
     if (params?.resolution) query.set("resolution", params.resolution);
-    if (params?.companyId) query.set("companyId", params.companyId);
+    if (params?.companySlug) query.set("companySlug", params.companySlug);
+    else if (params?.companyId) query.set("companyId", params.companyId);
     if (params?.from) query.set("from", params.from);
     if (params?.to) query.set("to", params.to);
     if (params?.limit) query.set("limit", String(params.limit));
@@ -2060,12 +2086,14 @@ export const sentimentApi = {
   },
   async reports(params?: {
     company_id?: string;
+    company_slug?: string;
     from?: string;
     to?: string;
     limit?: number;
   }): Promise<ReportsListResponse> {
     const query = new URLSearchParams();
     if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.company_slug) query.set("companySlug", params.company_slug);
     if (params?.from) query.set("from", params.from);
     if (params?.to) query.set("to", params.to);
     if (typeof params?.limit === "number" && Number.isFinite(params.limit)) {
@@ -2180,6 +2208,7 @@ export async function downloadReport(
     filename?: string;
     search_id?: string;
     company_id?: string;
+    company_slug?: string;
     from?: string;
     to?: string;
   }
@@ -2188,10 +2217,11 @@ export async function downloadReport(
   if (params?.search_id) query.set("search_id", params.search_id);
   if (params?.source) query.set("source", params.source);
   if (params?.company_id) query.set("companyId", params.company_id);
+  if (params?.company_slug) query.set("companySlug", params.company_slug);
   if (params?.from) query.set("from", params.from);
   if (params?.to) query.set("to", params.to);
 
-  const hasCompanyFilter = Boolean(params?.company_id || params?.from || params?.to);
+  const hasCompanyFilter = Boolean(params?.company_id || params?.company_slug || params?.from || params?.to);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   let endpoint = `/api/reports/export/${format}${suffix}`;
   if (!hasCompanyFilter && params?.search_id) {

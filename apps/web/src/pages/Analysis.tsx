@@ -21,6 +21,7 @@ import { toast } from "sonner";
 
 type PriorityUrgencyFilter = "all" | "high" | "medium" | "low";
 type ResolutionFilter = "all" | "pending" | "in_progress" | "resolved";
+const ALL_COMPANIES_VALUE = "all";
 
 function resolveInsightId(item: InsightItem): string {
   return item.insight_id || item.id;
@@ -95,7 +96,7 @@ function resolveConfidenceBadge(confidence: number, t: ReturnType<typeof useAppS
 export default function AnalysisPage() {
   const { settings, t } = useAppSettings();
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [items, setItems] = useState<InsightItem[]>([]);
@@ -117,7 +118,7 @@ export default function AnalysisPage() {
       try {
         const response = await sentimentApi.listCompanies();
         if (!active) return;
-        setCompanies(response.items || []);
+        setCompanies(response || []);
       } catch {
         if (!active) return;
         setCompanies([]);
@@ -141,7 +142,7 @@ export default function AnalysisPage() {
         priority: priorityFilter === "all" ? undefined : priorityFilter,
         urgency: urgencyFilter === "all" ? undefined : urgencyFilter,
         resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
-        company_id: selectedCompanyId || undefined,
+        company_slug: selectedCompanySlug === ALL_COMPANIES_VALUE ? undefined : selectedCompanySlug,
         from: fromDate || undefined,
         to: toDate || undefined,
       };
@@ -167,7 +168,7 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     void loadInsights();
-  }, [includeArchived, priorityFilter, urgencyFilter, resolutionFilter, selectedCompanyId, fromDate, toDate]);
+  }, [includeArchived, priorityFilter, urgencyFilter, resolutionFilter, selectedCompanySlug, fromDate, toDate]);
 
   async function handleGenerate() {
     setProcessing(true);
@@ -223,7 +224,7 @@ export default function AnalysisPage() {
       const exportFilters = {
         priority: priorityFilter === "all" ? undefined : priorityFilter,
         resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
-        companyId: selectedCompanyId || undefined,
+        companySlug: selectedCompanySlug === ALL_COMPANIES_VALUE ? undefined : selectedCompanySlug,
         from: fromDate || undefined,
         to: toDate || undefined,
         limit: 100,
@@ -416,12 +417,12 @@ export default function AnalysisPage() {
           <span className="text-muted-foreground">Empresa:</span>
           <select
             className="field-input h-9 py-1"
-            value={selectedCompanyId}
-            onChange={(event) => setSelectedCompanyId(event.target.value)}
+            value={selectedCompanySlug}
+            onChange={(event) => setSelectedCompanySlug(event.target.value)}
           >
-            <option value="">Todas</option>
+            <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
             {companies.map((company) => (
-              <option key={company.companyId} value={company.companyId}>
+              <option key={company.slug} value={company.slug}>
                 {company.name}
               </option>
             ))}

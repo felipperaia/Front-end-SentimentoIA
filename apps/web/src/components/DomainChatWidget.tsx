@@ -132,7 +132,7 @@ export function DomainChatWidget() { // NOSONAR
           await loadMessages(activeThreadId);
         }
       } catch {
-        toast.error("O assistente esta temporariamente indisponivel. Tente novamente.");
+        toast.error("Erro ao conectar com o assistente. Tente novamente.");
         if (activeThreadId) {
           try {
             await loadMessages(activeThreadId);

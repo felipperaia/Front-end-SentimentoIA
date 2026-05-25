@@ -11,12 +11,13 @@ import {
 } from "@/lib/api";
 
 type ExportAction = "csv" | "pdf";
+const ALL_COMPANIES_VALUE = "all";
 
 export default function ReportsPage() {
   const { t } = useAppSettings();
 
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [limit, setLimit] = useState(100);
@@ -29,7 +30,7 @@ export default function ReportsPage() {
   async function loadCompanies() {
     try {
       const response = await sentimentApi.listCompanies();
-      setCompanies(response.items || []);
+      setCompanies(response || []);
     } catch {
       setCompanies([]);
     }
@@ -41,7 +42,7 @@ export default function ReportsPage() {
 
     try {
       const response = await sentimentApi.reports({
-        company_id: selectedCompanyId || undefined,
+        company_slug: selectedCompanySlug === ALL_COMPANIES_VALUE ? undefined : selectedCompanySlug,
         from: fromDate || undefined,
         to: toDate || undefined,
         limit,
@@ -60,7 +61,7 @@ export default function ReportsPage() {
 
     try {
       await downloadReport(format, {
-        company_id: selectedCompanyId || undefined,
+        company_slug: selectedCompanySlug === ALL_COMPANIES_VALUE ? undefined : selectedCompanySlug,
         from: fromDate || undefined,
         to: toDate || undefined,
       });
@@ -77,11 +78,11 @@ export default function ReportsPage() {
 
   useEffect(() => {
     void loadReports();
-  }, [selectedCompanyId, fromDate, toDate, limit]);
+  }, [selectedCompanySlug, fromDate, toDate, limit]);
 
   const selectedCompanyName = useMemo(
-    () => companies.find((company) => company.companyId === selectedCompanyId)?.name || "Todas",
-    [companies, selectedCompanyId]
+    () => companies.find((company) => company.slug === selectedCompanySlug)?.name || "Todas as empresas",
+    [companies, selectedCompanySlug]
   );
 
   let reportsContent: ReactNode;
@@ -143,12 +144,12 @@ export default function ReportsPage() {
             <span className="text-muted-foreground">Empresa:</span>
             <select
               className="field-input h-9 py-1"
-              value={selectedCompanyId}
-              onChange={(event) => setSelectedCompanyId(event.target.value)}
+              value={selectedCompanySlug}
+              onChange={(event) => setSelectedCompanySlug(event.target.value)}
             >
-              <option value="">Todas</option>
+              <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
               {companies.map((company) => (
-                <option key={company.companyId} value={company.companyId}>
+                <option key={company.slug} value={company.slug}>
                   {company.name}
                 </option>
               ))}

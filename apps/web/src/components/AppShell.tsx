@@ -22,7 +22,12 @@ type MenuItem = {
 export function AppShell({ title, subtitle, actions, children }: Readonly<ShellProps>) {
   const [location, setLocation] = useLocation();
   const { logout } = useAuth();
-  const { t } = useAppSettings();
+  const { resetSettings, t } = useAppSettings();
+
+  async function handleLogout() {
+    resetSettings();
+    await logout();
+  }
 
   const isActivePath = (path: string) => location === path || location.startsWith(`${path}/`);
 
@@ -60,7 +65,13 @@ export function AppShell({ title, subtitle, actions, children }: Readonly<ShellP
                 );
               })}
               <LanguageSelector compact className="shrink-0" />
-              <button type="button" onClick={logout} className="shell-nav-btn text-rose-600">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleLogout();
+                }}
+                className="shell-nav-btn text-rose-600"
+              >
                 <LogOut size={16} />
                 <span>{t("nav.logout")}</span>
               </button>

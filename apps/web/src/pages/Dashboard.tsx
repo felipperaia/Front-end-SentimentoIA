@@ -41,6 +41,7 @@ import { getSourceColor, getSourceLabel } from "@/lib/sourceColors";
 
 const COLORS = ["#0f766e", "#ea580c", "#0ea5e9", "#16a34a", "#db2777", "#7c3aed"];
 const LAST_SEARCH_ID_KEY = "sentimentoia_last_search_id";
+const ALL_COMPANIES_VALUE = "all";
 
 type SourceChartItem = {
   source: string;
@@ -317,7 +318,7 @@ export default function Dashboard() { // NOSONAR
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [sourceData, setSourceData] = useState<SourceChartItem[]>([]);
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
@@ -325,19 +326,19 @@ export default function Dashboard() { // NOSONAR
   async function loadCompanies() {
     try {
       const response = await sentimentApi.listCompanies();
-      setCompanies(response.items || []);
+      setCompanies(response || []);
     } catch {
       setCompanies([]);
     }
   }
 
-  async function loadDashboard(companyId = selectedCompanyId) {
+  async function loadDashboard(companySlug = selectedCompanySlug) {
     setLoading(true);
     setError("");
 
     try {
       const dashboardData = await sentimentApi.dashboard({
-        company_id: companyId || undefined,
+        company_slug: companySlug === ALL_COMPANIES_VALUE ? undefined : companySlug,
       });
       setData(dashboardData);
 
@@ -374,20 +375,20 @@ export default function Dashboard() { // NOSONAR
   }, []);
 
   useEffect(() => {
-    void loadDashboard(selectedCompanyId);
-  }, [selectedCompanyId]);
+    void loadDashboard(selectedCompanySlug);
+  }, [selectedCompanySlug]);
 
   const metrics = data?.metrics ?? {};
   const mentions = data?.mentions ?? [];
 
-  const selectedCompany = useMemo(
-    () => companies.find((company) => company.companyId === selectedCompanyId) ?? null,
-    [companies, selectedCompanyId]
+  const selectedCompanyData = useMemo(
+    () => companies.find((company) => company.slug === selectedCompanySlug) ?? null,
+    [companies, selectedCompanySlug]
   );
 
   const dashboardCompanyName = useMemo(
-    () => resolveCurrentCompanyName(data, selectedCompany),
-    [data, selectedCompany]
+    () => resolveCurrentCompanyName(data, selectedCompanyData),
+    [data, selectedCompanyData]
   );
   const dashboardPeriodLabel = useMemo(() => resolvePeriodLabel(data), [data]);
 
@@ -460,13 +461,13 @@ export default function Dashboard() { // NOSONAR
             <select
               id="dashboard-company-filter"
               className="field-input h-10 py-2"
-              value={selectedCompanyId}
-              onChange={(event) => setSelectedCompanyId(event.target.value)}
+              value={selectedCompanySlug}
+              onChange={(event) => setSelectedCompanySlug(event.target.value)}
               aria-label="Filtrar por empresa"
             >
-              <option value="">Todas as empresas</option>
+              <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
               {companies.map((company) => (
-                <option key={company.companyId} value={company.companyId}>
+                <option key={company.slug} value={company.slug}>
                   {company.name}
                 </option>
               ))}
@@ -482,7 +483,7 @@ export default function Dashboard() { // NOSONAR
           <button onClick={() => setLocation("/search")} className="secondary-btn">
             {t("dashboard.newSearch")}
           </button>
-          <button onClick={() => void loadDashboard(selectedCompanyId)} className="primary-btn">
+          <button onClick={() => void loadDashboard(selectedCompanySlug)} className="primary-btn">
             <RefreshCw size={16} />
             <span>{t("common.refresh")}</span>
           </button>
@@ -687,7 +688,7 @@ export default function Dashboard() { // NOSONAR
         isOpen={isDataModalOpen}
         onClose={() => setIsDataModalOpen(false)}
         onDataDeleted={() => {
-          void loadDashboard(selectedCompanyId);
+          void loadDashboard(selectedCompanySlug);
         }}
       />
     </AppShell>

@@ -141,47 +141,9 @@ export default function SearchPage() {
   const [lastScrape, setLastScrape] = useState<ScrapeResponse | null>(null);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadSourceOptions() {
-      try {
-        const status = await sentimentApi.integrationsStatus();
-        if (!active) return;
-
-        const activeMetadata = (status.scraper_source_metadata || [])
-          .filter((item) => item.active)
-          .sort((a, b) => b.priority - a.priority);
-
-        if (activeMetadata.length === 0) {
-          return;
-        }
-
-        const dynamicOptions: SourceOption[] = activeMetadata
-          .map((item) => {
-            const sourceId = asScrapeSource(item.name);
-            if (!sourceId) return null;
-            return {
-              id: sourceId,
-              name: getSourceLabel(sourceId),
-              icon: iconFromSourceName(item.name),
-            };
-          })
-          .filter((item): item is SourceOption => item !== null);
-
-        if (dynamicOptions.length > 0) {
-          setSourceOptions(dynamicOptions);
-          setSelectedSources((current) => resolveSelectedSources(current, dynamicOptions));
-        }
-      } catch {
-        // Mantem fallback local quando endpoint de integracoes estiver indisponivel.
-      }
-    }
-
-    void loadSourceOptions();
-
-    return () => {
-      active = false;
-    };
+    const options = FALLBACK_SOURCE_OPTIONS;
+    setSourceOptions(options);
+    setSelectedSources((current) => resolveSelectedSources(current, options));
   }, []);
 
   useEffect(() => {
@@ -286,74 +248,12 @@ export default function SearchPage() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (selectedSources.length === 0) {
-      toast.error(t("search.selectSource"));
-      return;
-    }
-
-    setLoading(true);
-    setIsSearching(true);
-    setSearchElapsedSeconds(0);
-
-    try {
-      const [scrapeResult, searchResult] = await Promise.allSettled([
-        sentimentApi.scrape({
-          query,
-          sources: selectedSources,
-          limit_per_source: limitPerSource,
-        }),
-        sentimentApi.search({
-          brand_name: query,
-          sources: selectedSources,
-          period_days: periodDays,
-          locality: locality.trim() || undefined,
-          replace_existing: replaceExisting,
-        }),
-      ]);
-
-      if (scrapeResult.status === "fulfilled") {
-        setLastScrape(scrapeResult.value);
-      } else {
-        setLastScrape(null);
-      }
-
-      if (searchResult.status !== "fulfilled") {
-        throw searchResult.reason;
-      }
-
-      const result = searchResult.value;
-
-      setLastResult(result);
-      localStorage.setItem(LAST_SEARCH_ID_KEY, result.search_id);
-      const mentionsCount = result.mentions?.length ?? 0;
-      const total = result.total ?? mentionsCount;
-
-      if (globalThis.window !== undefined) {
-        globalThis.window.dispatchEvent(
-          new CustomEvent(SEARCH_COMPLETED_EVENT, {
-            detail: {
-              searchId: result.search_id,
-              mentionsCount,
-              total,
-            },
-          })
-        );
-      }
-
-      if (result.status === "partial_success") {
-        toast.warning(result.status_summary?.message || "Busca concluida com falhas parciais em algumas fontes.");
-      } else if (result.status === "failed") {
-        toast.error(result.status_summary?.message || "Busca concluida sem resultados devido a falhas nas fontes selecionadas.");
-      } else if (total === 0) {
-        toast.warning(t("search.emptyResult"));
-      }
-    } catch (err) {
-      console.error(t("search.error"), err);
-      toast.error(err instanceof Error ? err.message : t("search.error"));
-    } finally {
-      setIsSearching(false);
-      setLoading(false);
-    }
+    toast.info("Coleta externa desativada. Use o fluxo de seed em Configuracoes.");
+    setLastResult(null);
+    setLastScrape(null);
+    setLoading(false);
+    setIsSearching(false);
+    setLocation("/settings#seeds");
   };
 
   return (

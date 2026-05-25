@@ -30,6 +30,7 @@ const SENTIMENT_COLORS: Record<string, string> = {
   neutro: "#6b7280",
   neutral: "#6b7280",
 };
+const ALL_COMPANIES_VALUE = "all";
 
 function toDateInput(date: Date): string {
   const year = date.getFullYear();
@@ -58,7 +59,7 @@ export default function MetricsPage() {
   const { t } = useAppSettings();
 
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
   const [periodPreset, setPeriodPreset] = useState<"7" | "30" | "90" | "custom">("30");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -70,7 +71,7 @@ export default function MetricsPage() {
   async function loadCompanies() {
     try {
       const response = await sentimentApi.listCompanies();
-      setCompanies(response.items || []);
+      setCompanies(response || []);
     } catch {
       setCompanies([]);
     }
@@ -82,14 +83,14 @@ export default function MetricsPage() {
 
     try {
       const params: {
-        company_id?: string;
+        company_slug?: string;
         period_days?: number;
         from?: string;
         to?: string;
       } = {};
 
-      if (selectedCompanyId) {
-        params.company_id = selectedCompanyId;
+      if (selectedCompanySlug !== ALL_COMPANIES_VALUE) {
+        params.company_slug = selectedCompanySlug;
       }
 
       if (periodPreset === "custom") {
@@ -126,7 +127,7 @@ export default function MetricsPage() {
 
   useEffect(() => {
     void loadMetrics();
-  }, [selectedCompanyId, periodPreset, fromDate, toDate]);
+  }, [selectedCompanySlug, periodPreset, fromDate, toDate]);
 
   const sentimentData = useMemo(
     () =>
@@ -163,8 +164,8 @@ export default function MetricsPage() {
 
   const companyName = useMemo(() => {
     if (data?.company_name) return data.company_name;
-    return companies.find((company) => company.companyId === selectedCompanyId)?.name || "Visao geral";
-  }, [companies, data?.company_name, selectedCompanyId]);
+    return companies.find((company) => company.slug === selectedCompanySlug)?.name || "Visao geral";
+  }, [companies, data?.company_name, selectedCompanySlug]);
 
   return (
     <AppShell
@@ -182,12 +183,12 @@ export default function MetricsPage() {
             <span className="text-sm text-muted-foreground">Empresa:</span>
             <select
               className="field-input h-10 py-2"
-              value={selectedCompanyId}
-              onChange={(event) => setSelectedCompanyId(event.target.value)}
+              value={selectedCompanySlug}
+              onChange={(event) => setSelectedCompanySlug(event.target.value)}
             >
-              <option value="">Todas</option>
+              <option value={ALL_COMPANIES_VALUE}>Todas as empresas</option>
               {companies.map((company) => (
-                <option key={company.companyId} value={company.companyId}>
+                <option key={company.slug} value={company.slug}>
                   {company.name}
                 </option>
               ))}

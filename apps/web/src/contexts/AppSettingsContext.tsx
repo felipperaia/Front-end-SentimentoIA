@@ -9,7 +9,6 @@ import {
 import { translate, type TranslationKey, type TranslationValues } from "@/lib/i18n";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "sentimentoia_preferences";
 const DEFAULT_LOCALE: AppLocale = import.meta.env.VITE_DEFAULT_LOCALE === "en-US" ? "en-US" : "pt-BR";
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -25,6 +24,7 @@ type AppSettingsContextType = {
   setThemePreference: (theme: AppTheme) => void;
   setLocalePreference: (locale: AppLocale) => void;
   setThresholdPreference: (value: number) => void;
+  resetSettings: () => void;
   refreshSettings: () => Promise<void>;
   saveSettings: (partial?: Partial<UserSettings>) => Promise<void>;
   t: (key: TranslationKey, values?: TranslationValues) => string;
@@ -32,35 +32,13 @@ type AppSettingsContextType = {
 
 const AppSettingsContext = createContext<AppSettingsContextType | undefined>(undefined);
 
-function loadStoredSettings(): UserSettings {
-  try {
-    const storedTheme = localStorage.getItem("theme");
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {
-        ...DEFAULT_SETTINGS,
-        theme: storedTheme === "dark" ? "dark" : "light",
-      };
-    }
-
-    const parsed = JSON.parse(raw) as Partial<UserSettings>;
-
-    let normalizedTheme: AppTheme;
-    if (storedTheme === "dark" || storedTheme === "light") {
-      normalizedTheme = storedTheme;
-    } else {
-      normalizedTheme = parsed.theme === "dark" ? "dark" : "light";
-    }
-
-    return {
-      theme: normalizedTheme,
-      locale: parsed.locale === "en-US" ? "en-US" : "pt-BR",
-      llm_trigger_min_comments: Math.max(1, Number(parsed.llm_trigger_min_comments || 20)),
-      updated_at: parsed.updated_at,
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+function normalizeSettings(value: Partial<UserSettings> | null | undefined): UserSettings {
+  return {
+    theme: value?.theme === "dark" ? "dark" : "light",
+    locale: value?.locale === "en-US" ? "en-US" : DEFAULT_LOCALE,
+    llm_trigger_min_comments: Math.max(1, Number(value?.llm_trigger_min_comments || DEFAULT_SETTINGS.llm_trigger_min_comments)),
+    updated_at: value?.updated_at,
+  };
 }
 
 function applyTheme(theme: AppTheme) {
@@ -70,50 +48,49 @@ function applyTheme(theme: AppTheme) {
   } else {
     root.classList.remove("dark");
   }
-  localStorage.setItem("theme", theme);
+  root.dataset.theme = theme;
 }
 
 export function AppSettingsProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [settings, setSettings] = useState<UserSettings>(() => loadStoredSettings());
+  const [settings, setSettings] = useState<UserSettings>(() => normalizeSettings(DEFAULT_SETTINGS));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(getToken()));
 
   useEffect(() => {
     document.documentElement.lang = settings.locale;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
     applyTheme(settings.theme);
   }, [settings.theme]);
 
+  const resetSettings = useCallback(() => {
+    setSettings(normalizeSettings(DEFAULT_SETTINGS));
+    setLoading(false);
+  }, []);
+
   const refreshSettings = useCallback(async () => {
     const token = getToken();
     if (!token) {
-      setSettings(loadStoredSettings());
-      setLoading(false);
+      resetSettings();
       return;
     }
 
+    setLoading(true);
     try {
       const remote = await sentimentApi.getSettings();
-      setSettings({
-        theme: remote.theme === "dark" ? "dark" : "light",
-        locale: remote.locale === "en-US" ? "en-US" : "pt-BR",
-        llm_trigger_min_comments: Math.max(1, Number(remote.llm_trigger_min_comments || 20)),
-        updated_at: remote.updated_at,
-      });
+      setSettings(normalizeSettings(remote));
     } catch {
-      // Mantem fallback local se backend indisponivel.
+      resetSettings();
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resetSettings]);
 
   useEffect(() => {
     void refreshSettings();
-  }, [refreshSettings, isAuthenticated]);
+  }, [isAuthenticated, refreshSettings]);
 
   useEffect(() => {
     function handleSessionChange() {
@@ -136,34 +113,26 @@ export function AppSettingsProvider({ children }: Readonly<{ children: React.Rea
 
   const saveSettings = useCallback(
     async (partial?: Partial<UserSettings>) => {
-      const merged: UserSettings = {
+      const merged = normalizeSettings({
         ...settings,
         ...partial,
-      };
-      merged.theme = merged.theme === "dark" ? "dark" : "light";
-      merged.locale = merged.locale === "en-US" ? "en-US" : "pt-BR";
-      merged.llm_trigger_min_comments = Math.max(1, Number(merged.llm_trigger_min_comments || 20));
-
-      setSettings(merged);
+      });
 
       if (!getToken()) {
+        resetSettings();
         return;
       }
 
+      setSettings(merged);
       setSaving(true);
       try {
         const updated = await sentimentApi.updateSettings(merged);
-        setSettings({
-          theme: updated.theme === "dark" ? "dark" : "light",
-          locale: updated.locale === "en-US" ? "en-US" : "pt-BR",
-          llm_trigger_min_comments: Math.max(1, Number(updated.llm_trigger_min_comments || 20)),
-          updated_at: updated.updated_at,
-        });
+        setSettings(normalizeSettings(updated));
       } finally {
         setSaving(false);
       }
     },
-    [settings]
+    [resetSettings, settings]
   );
 
   const setThemePreference = useCallback((theme: AppTheme) => {
@@ -194,6 +163,7 @@ export function AppSettingsProvider({ children }: Readonly<{ children: React.Rea
       setThemePreference,
       setLocalePreference,
       setThresholdPreference,
+      resetSettings,
       refreshSettings,
       saveSettings,
       t,
@@ -205,6 +175,7 @@ export function AppSettingsProvider({ children }: Readonly<{ children: React.Rea
       setThemePreference,
       setLocalePreference,
       setThresholdPreference,
+      resetSettings,
       refreshSettings,
       saveSettings,
       t,

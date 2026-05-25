@@ -41,9 +41,12 @@ export function useAuth(options?: UseAuthOptions) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    authApi.logout();
-    setUser(null);
-    window.location.href = "/";
+    try {
+      await authApi.logout();
+    } finally {
+      setUser(null);
+      globalThis.location.href = "/";
+    }
   }, []);
 
   const state = useMemo(
@@ -60,9 +63,9 @@ export function useAuth(options?: UseAuthOptions) {
     if (!redirectOnUnauthenticated) return;
     if (loading) return;
     if (user) return;
-    if (typeof window === "undefined") return;
-    if (window.location.pathname === redirectPath) return;
-    window.location.href = redirectPath;
+    if (globalThis.window === undefined) return;
+    if (globalThis.location.pathname === redirectPath) return;
+    globalThis.location.href = redirectPath;
   }, [redirectOnUnauthenticated, redirectPath, loading, user]);
 
   return {
