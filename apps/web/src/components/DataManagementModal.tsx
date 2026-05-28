@@ -50,7 +50,7 @@ export function DataManagementModal({ isOpen, onClose, onDataDeleted }: ModalPro
     setSuccess("");
 
     try {
-      if (type === "conversations") await sentimentApi.deleteAllConversations();
+      if (type === "conversations") await sentimentApi.deleteAllChatThreads();
       if (type === "searches") await sentimentApi.deleteAllSearches();
       if (type === "insights") await sentimentApi.deleteAllInsights();
       
@@ -154,7 +154,7 @@ export function DataManagementModal({ isOpen, onClose, onDataDeleted }: ModalPro
               <div>
                 <h3 className="font-medium text-rose-800 dark:text-rose-200">Zona de Perigo</h3>
                 <p className="mt-1 text-sm text-rose-700/80 dark:text-rose-300/80">
-                  Esta ação apagará <strong>todos</strong> os dados vinculados à sua conta (buscas, conversas, cache de scraper, etc). Não há volta.
+                  Esta ação apagará <strong>todos</strong> os dados vinculados à sua conta (buscas, conversas, cache operacional, etc). Não há volta.
                 </p>
                 <button 
                   type="button"

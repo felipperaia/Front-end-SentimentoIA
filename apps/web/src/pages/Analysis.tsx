@@ -26,9 +26,26 @@ import {
 } from "@/lib/api";
 import { toast } from "sonner";
 
-type PriorityUrgencyFilter = "all" | "high" | "medium" | "low";
-type ResolutionFilter = "all" | "pending" | "in_progress" | "resolved";
-const ALL_COMPANIES_VALUE = "all";
+type PriorityUrgencyFilter = "any" | "high" | "medium" | "low";
+type ResolutionFilter = "any" | "pending" | "in_progress" | "resolved";
+
+function toDateInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function resolveDefaultDateRange(days = 30): { from: string; to: string } {
+  const safeDays = Math.max(1, Math.min(365, Math.round(days || 30)));
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(end.getDate() - (safeDays - 1));
+  return {
+    from: toDateInput(start),
+    to: toDateInput(end),
+  };
+}
 
 function resolveInsightId(item: InsightItem): string {
   return item.insight_id || item.id;
@@ -102,40 +119,49 @@ function resolveConfidenceBadge(confidence: number, t: ReturnType<typeof useAppS
 
 export default function AnalysisPage() {
   const { settings, t } = useAppSettings();
-  const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
+  const [defaultRange] = useState(() => resolveDefaultDateRange(30));
+  const [selectedCompanySlug, setSelectedCompanySlug] = useState("");
   const { data: companiesData } = useQuery({
     queryKey: ["companies"],
     queryFn: sentimentApi.listCompanies,
     staleTime: 5 * 60 * 1000,
   });
   const companies = companiesData ?? [];
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(defaultRange.from);
+  const [toDate, setToDate] = useState(defaultRange.to);
   const [items, setItems] = useState<InsightItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [activeExport, setActiveExport] = useState<"pdf" | "csv" | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [priorityFilter, setPriorityFilter] = useState<PriorityUrgencyFilter>("all");
-  const [urgencyFilter, setUrgencyFilter] = useState<PriorityUrgencyFilter>("all");
-  const [resolutionFilter, setResolutionFilter] = useState<ResolutionFilter>("all");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityUrgencyFilter>("any");
+  const [urgencyFilter, setUrgencyFilter] = useState<PriorityUrgencyFilter>("any");
+  const [resolutionFilter, setResolutionFilter] = useState<ResolutionFilter>("any");
   const [error, setError] = useState("");
   const [expectedStateMessage, setExpectedStateMessage] = useState("");
+  const hasRequiredFilters = Boolean(selectedCompanySlug && fromDate && toDate);
 
-  async function loadInsights(include = includeArchived) {
+  async function loadInsights(include = includeArchived): Promise<InsightItem[]> {
+    if (!hasRequiredFilters) {
+      setItems([]);
+      setLoading(false);
+      setError("");
+      return [];
+    }
+
     setLoading(true);
     setError("");
     try {
       const existingParams = {
         include_archived: include,
         limit: 100,
-        priority: priorityFilter === "all" ? undefined : priorityFilter,
-        urgency: urgencyFilter === "all" ? undefined : urgencyFilter,
-        resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
-        company_slug: selectedCompanySlug === ALL_COMPANIES_VALUE ? undefined : selectedCompanySlug,
-        from: fromDate || undefined,
-        to: toDate || undefined,
+        priority: priorityFilter === "any" ? undefined : priorityFilter,
+        urgency: urgencyFilter === "any" ? undefined : urgencyFilter,
+        resolution: resolutionFilter === "any" ? undefined : resolutionFilter,
+        company_slug: selectedCompanySlug,
+        from: fromDate,
+        to: toDate,
       };
       const response = await sentimentApi.insights(existingParams);
       let normalizedItems: InsightItem[] = [];
@@ -144,29 +170,55 @@ export default function AnalysisPage() {
       } else if (Array.isArray(response as unknown)) {
         normalizedItems = response as unknown as InsightItem[];
       }
-      setItems(
-        [...normalizedItems].sort(
-          (a, b) => resolveInsightDateSortValue(b) - resolveInsightDateSortValue(a)
-        )
+      const sortedItems = [...normalizedItems].sort(
+        (a, b) => resolveInsightDateSortValue(b) - resolveInsightDateSortValue(a)
       );
+      setItems(
+        sortedItems
+      );
+      return sortedItems;
     } catch (err) {
       setError(err instanceof Error ? err.message : t("analysis.loadError"));
       setItems([]);
+      return [];
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    if (!hasRequiredFilters) {
+      setItems([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+
     void loadInsights();
-  }, [includeArchived, priorityFilter, urgencyFilter, resolutionFilter, selectedCompanySlug, fromDate, toDate]);
+  }, [hasRequiredFilters, includeArchived, priorityFilter, urgencyFilter, resolutionFilter, selectedCompanySlug, fromDate, toDate]);
 
   async function handleGenerate() {
+    if (!hasRequiredFilters) {
+      toast.error("Selecione empresa e periodo antes de gerar insights.");
+      return;
+    }
+
     setProcessing(true);
     setError("");
     setExpectedStateMessage("");
+
     try {
-      await sentimentApi.generateInsight();
+      const existingItems = await loadInsights();
+      if (existingItems.length > 0) {
+        toast.info("Insight persistido encontrado para o filtro atual. Reutilizando resultado existente.");
+        return;
+      }
+
+      await sentimentApi.generateInsight({
+        company_slug: selectedCompanySlug,
+        from: fromDate,
+        to: toDate,
+      });
       await loadInsights();
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === "threshold_not_met") {
@@ -210,14 +262,19 @@ export default function AnalysisPage() {
   }
 
   async function handleInsightsExport(format: "pdf" | "csv") {
+    if (!hasRequiredFilters) {
+      toast.error("Selecione empresa e periodo antes de exportar insights.");
+      return;
+    }
+
     setActiveExport(format);
     try {
       const exportFilters = {
-        priority: priorityFilter === "all" ? undefined : priorityFilter,
-        resolution: resolutionFilter === "all" ? undefined : resolutionFilter,
-        companySlug: selectedCompanySlug === ALL_COMPANIES_VALUE ? undefined : selectedCompanySlug,
-        from: fromDate || undefined,
-        to: toDate || undefined,
+        priority: priorityFilter === "any" ? undefined : priorityFilter,
+        resolution: resolutionFilter === "any" ? undefined : resolutionFilter,
+        companySlug: selectedCompanySlug,
+        from: fromDate,
+        to: toDate,
         limit: 100,
       };
 
@@ -234,7 +291,17 @@ export default function AnalysisPage() {
   }
 
   let content: ReactNode;
-  if (loading) {
+  if (!hasRequiredFilters) {
+    content = (
+      <div className="app-panel mx-auto max-w-3xl p-10 text-center">
+        <Sparkles className="mx-auto mb-4 h-12 w-12 text-[color:var(--brand)]" />
+        <h2 className="text-2xl font-semibold">Selecione uma empresa para iniciar</h2>
+        <p className="mb-6 mt-2 text-muted-foreground">
+          Insights sao carregados apenas com empresa e faixa de datas definidas.
+        </p>
+      </div>
+    );
+  } else if (loading) {
     content = <div className="text-sm text-muted-foreground">{t("analysis.loading")}</div>;
   } else if (error) {
     content = (
@@ -373,7 +440,7 @@ export default function AnalysisPage() {
   return (
     <AppShell
       title={t("analysis.title")}
-      subtitle={t("analysis.subtitle")}
+      subtitle={hasRequiredFilters ? t("analysis.subtitle") : "Escolha empresa e periodo para consultar insights."}
       actions={
         <>
           <button
@@ -381,7 +448,7 @@ export default function AnalysisPage() {
               void handleInsightsExport("pdf");
             }}
             className="secondary-btn"
-            disabled={activeExport !== null}
+            disabled={activeExport !== null || !hasRequiredFilters || items.length === 0}
           >
             <FileText size={16} /> {activeExport === "pdf" ? t("common.processing") : "Exportar PDF"}
           </button>
@@ -390,14 +457,14 @@ export default function AnalysisPage() {
               void handleInsightsExport("csv");
             }}
             className="secondary-btn"
-            disabled={activeExport !== null}
+            disabled={activeExport !== null || !hasRequiredFilters || items.length === 0}
           >
             <Download size={16} /> {activeExport === "csv" ? t("common.processing") : "Exportar CSV"}
           </button>
-          <button onClick={() => loadInsights()} className="secondary-btn">
+          <button onClick={() => void loadInsights()} className="secondary-btn" disabled={!hasRequiredFilters}>
             <RefreshCw size={16} /> {t("common.refresh")}
           </button>
-          <button onClick={handleGenerate} disabled={processing} className="primary-btn">
+          <button onClick={handleGenerate} disabled={processing || !hasRequiredFilters} className="primary-btn">
             <Brain size={16} /> {processing ? t("analysis.generating") : t("analysis.generate")}
           </button>
         </>
@@ -406,12 +473,11 @@ export default function AnalysisPage() {
       <div className="mb-5 grid gap-3 rounded-xl border border-border/70 bg-card/80 p-3 text-sm md:grid-cols-3">
         <label className="flex items-center gap-2">
           <span className="text-muted-foreground">Empresa:</span>
-          <Select value={selectedCompanySlug} onValueChange={setSelectedCompanySlug}>
+          <Select value={selectedCompanySlug || undefined} onValueChange={setSelectedCompanySlug}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Filtrar por empresa" />
+              <SelectValue placeholder={companies.length > 0 ? "Selecione uma empresa" : "Nenhuma empresa cadastrada"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
               {companies.map((company) => (
                 <SelectItem key={company.slug} value={company.slug}>
                   {company.name}
@@ -459,7 +525,7 @@ export default function AnalysisPage() {
             value={priorityFilter}
             onChange={(event) => setPriorityFilter(event.target.value as PriorityUrgencyFilter)}
           >
-            <option value="all">Todas</option>
+            <option value="any">Qualquer</option>
             <option value="high">Alta</option>
             <option value="medium">Média</option>
             <option value="low">Baixa</option>
@@ -475,7 +541,7 @@ export default function AnalysisPage() {
               setUrgencyFilter(event.target.value as PriorityUrgencyFilter)
             }
           >
-            <option value="all">Todas</option>
+            <option value="any">Qualquer</option>
             <option value="high">Alta</option>
             <option value="medium">Media</option>
             <option value="low">Baixa</option>
@@ -491,7 +557,7 @@ export default function AnalysisPage() {
               setResolutionFilter(event.target.value as ResolutionFilter)
             }
           >
-            <option value="all">Todas</option>
+            <option value="any">Qualquer</option>
             <option value="pending">Pendente</option>
             <option value="in_progress">Em andamento</option>
             <option value="resolved">Resolvido</option>

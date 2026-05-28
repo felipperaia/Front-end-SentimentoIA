@@ -25,7 +25,7 @@ type ProfileDraft = {
 
 const DELETE_CONFIRM_TEXT = "ENCERRAR CONTA";
 
-const SEED_EXAMPLE = {
+const INGEST_EXAMPLE = {
   company_name: "Acme Corp",
   company_slug: "acme-corp",
   period_label: "Ultimos 30 dias",
@@ -48,6 +48,106 @@ const SEED_EXAMPLE = {
     },
   ],
 };
+
+type IngestValidationError = {
+  index: number;
+  field?: string;
+  message: string;
+};
+
+type IngestSummary = {
+  parsedCount: number;
+  sentCount: number;
+  acceptedCount: number;
+  insertedCount?: number;
+  updatedCount?: number;
+  errors: IngestValidationError[];
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function resolveMentionTextCandidate(item: Record<string, unknown>): string {
+  if (typeof item.text === "string") return item.text;
+  if (typeof item.title === "string") return item.title;
+  if (typeof item.content === "string") return item.content;
+  if (typeof item.body === "string") return item.body;
+  return "";
+}
+
+function normalizeIngestValidationErrors(items: unknown[]): IngestValidationError[] {
+  const errors: IngestValidationError[] = [];
+
+  items.forEach((item, index) => {
+    if (!isPlainObject(item)) {
+      errors.push({
+        index,
+        message: "Cada item deve ser um objeto JSON.",
+      });
+      return;
+    }
+
+    const source = typeof item.source === "string" ? item.source.trim() : "";
+    const textCandidate = resolveMentionTextCandidate(item);
+    const text = textCandidate.trim();
+
+    if (!source) {
+      errors.push({
+        index,
+        field: "source",
+        message: "Campo source obrigatorio.",
+      });
+    }
+
+    if (!text) {
+      errors.push({
+        index,
+        field: "text",
+        message: "Campo text (ou title/content/body) obrigatorio.",
+      });
+    }
+  });
+
+  return errors;
+}
+
+function prepareIngestPayload(parsed: unknown): {
+  payload: Record<string, unknown> | Record<string, unknown>[];
+  itemCount: number;
+  validationErrors: IngestValidationError[];
+} {
+  if (Array.isArray(parsed)) {
+    return {
+      payload: parsed as Record<string, unknown>[],
+      itemCount: parsed.length,
+      validationErrors: normalizeIngestValidationErrors(parsed),
+    };
+  }
+
+  if (!isPlainObject(parsed)) {
+    return {
+      payload: [],
+      itemCount: 0,
+      validationErrors: [{ index: -1, message: "JSON deve ser um array de itens ou objeto com mentions." }],
+    };
+  }
+
+  const mentions = Array.isArray(parsed.mentions) ? parsed.mentions : null;
+  if (!mentions) {
+    return {
+      payload: parsed,
+      itemCount: 0,
+      validationErrors: [{ index: -1, message: "Objeto JSON deve conter o campo mentions (array)." }],
+    };
+  }
+
+  return {
+    payload: parsed,
+    itemCount: mentions.length,
+    validationErrors: normalizeIngestValidationErrors(mentions),
+  };
+}
 
 function normalizeUsername(value: string) {
   return value
@@ -94,8 +194,10 @@ export default function SettingsPage() {
   const [mfaError, setMfaError] = useState("");
   const [mfaSetup, setMfaSetup] = useState<{ secret: string; qr_code: string } | null>(null);
 
-  const [seedJson, setSeedJson] = useState(JSON.stringify(SEED_EXAMPLE, null, 2));
-  const [seedBusy, setSeedBusy] = useState(false);
+  const [ingestJson, setIngestJson] = useState(JSON.stringify(INGEST_EXAMPLE, null, 2));
+  const [ingestBusy, setIngestBusy] = useState(false);
+  const [ingestFileName, setIngestFileName] = useState("");
+  const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
 
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -295,25 +397,100 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleSeedData() {
-    setSeedBusy(true);
+  async function handleIngestFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      toast.error("Selecione um arquivo .json valido.");
+      return;
+    }
+
     try {
-      const parsed = JSON.parse(seedJson);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        toast.error("O JSON de seed deve ser um objeto no formato esperado.");
+      const content = await file.text();
+      setIngestJson(content);
+      setIngestFileName(file.name);
+      setIngestSummary(null);
+      toast.success("Arquivo JSON carregado.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao ler o arquivo JSON.");
+    }
+  }
+
+  async function handleIngestData() {
+    setIngestBusy(true);
+    setIngestSummary(null);
+
+    try {
+      const parsed = JSON.parse(ingestJson);
+      const prepared = prepareIngestPayload(parsed);
+
+      if (prepared.itemCount <= 0) {
+        const errors =
+          prepared.validationErrors.length > 0
+            ? prepared.validationErrors
+            : [{ index: -1, message: "Nenhum item encontrado para envio." }];
+        setIngestSummary({
+          parsedCount: prepared.itemCount,
+          sentCount: 0,
+          acceptedCount: 0,
+          errors,
+        });
+        toast.error(errors[0]?.message || "Nenhum item encontrado para envio.");
         return;
       }
 
-      await sentimentApi.seedDemoData(parsed as Record<string, unknown>);
-      toast.success("Seeds enviados com sucesso.");
+      if (prepared.validationErrors.length > 0) {
+        setIngestSummary({
+          parsedCount: prepared.itemCount,
+          sentCount: 0,
+          acceptedCount: 0,
+          errors: prepared.validationErrors,
+        });
+        toast.error("JSON com erros de validacao por indice. Corrija antes de enviar.");
+        return;
+      }
+
+      const response = await sentimentApi.ingest(prepared.payload);
+      const responseErrors: IngestValidationError[] = response.errors.map((item) => ({
+        index: item.index,
+        field: item.field,
+        message: item.message,
+      }));
+
+      setIngestSummary({
+        parsedCount: prepared.itemCount,
+        sentCount: prepared.itemCount,
+        acceptedCount: response.accepted,
+        insertedCount: response.inserted,
+        updatedCount: response.updated,
+        errors: responseErrors,
+      });
+
+      if (responseErrors.length > 0) {
+        toast.warning(response.message || `Ingestao concluida com ${responseErrors.length} erro(s).`);
+      } else {
+        toast.success(response.message || `Ingestao concluida: ${response.accepted} item(ns) aceito(s).`);
+      }
     } catch (err) {
       if (err instanceof SyntaxError) {
-        toast.error("JSON invalido. Revise o conteudo antes de enviar.");
+        const errors = [{ index: -1, message: "JSON invalido. Revise o conteudo antes de enviar." }];
+        setIngestSummary({
+          parsedCount: 0,
+          sentCount: 0,
+          acceptedCount: 0,
+          errors,
+        });
+        toast.error(errors[0].message);
       } else {
-        toast.error(err instanceof Error ? err.message : "Falha ao executar seeds.");
+        toast.error(err instanceof Error ? err.message : "Falha ao enviar JSON para ingestao.");
       }
     } finally {
-      setSeedBusy(false);
+      setIngestBusy(false);
     }
   }
 
@@ -340,7 +517,7 @@ export default function SettingsPage() {
   return (
     <AppShell
       title={t("settings.title")}
-      subtitle="Ajustes de perfil, preferencias, seguranca, seeds e controle de conta."
+      subtitle="Ajustes de perfil, preferencias, seguranca, ingestao e controle de conta."
       actions={
         <button
           type="button"
@@ -359,7 +536,7 @@ export default function SettingsPage() {
           <a href="#appearance" className="secondary-btn">Aparencia</a>
           <a href="#security" className="secondary-btn">Seguranca</a>
           <a href="#mfa" className="secondary-btn">MFA</a>
-          <a href="#seeds" className="secondary-btn">Seeds</a>
+          <a href="#ingest" className="secondary-btn">Ingestao</a>
           <a href="#danger-zone" className="secondary-btn text-rose-600">Danger Zone</a>
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
@@ -631,40 +808,100 @@ export default function SettingsPage() {
         )}
       </section>
 
-      <section id="seeds" className="mb-5 app-panel p-6 md:p-7">
+      <section id="ingest" className="mb-5 app-panel p-6 md:p-7">
         <header className="flex flex-wrap items-center gap-2">
           <Database size={18} className="text-[color:var(--brand)]" />
-          <h2 className="panel-title">Seeds de dados</h2>
+          <h2 className="panel-title">Ingestao de dados JSON</h2>
         </header>
         <p className="mt-2 text-sm text-muted-foreground">
-          Envie um payload JSON para popular dados de exemplo no dashboard e nas analises.
+          Envie um arquivo .json ou cole o payload para ingestao real de dados no backend.
         </p>
 
-        <div className="mt-4 space-y-3">
-          <textarea
-            className="field-input min-h-[220px] font-mono text-xs"
-            value={seedJson}
-            onChange={(event) => setSeedJson(event.target.value)}
-            spellCheck={false}
-          />
+        <div className="mt-4 space-y-4">
+          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+            <label className="field-label" htmlFor="ingest-file">Arquivo JSON</label>
+            <input
+              id="ingest-file"
+              type="file"
+              accept=".json,application/json"
+              className="mt-2 block w-full cursor-pointer text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-[color:var(--brand)] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-[color:var(--brand-strong)]"
+              onChange={(event) => void handleIngestFileChange(event)}
+              disabled={ingestBusy}
+            />
+            {ingestFileName ? (
+              <p className="mt-2 text-xs text-muted-foreground">Arquivo carregado: {ingestFileName}</p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className="field-label" htmlFor="ingest-json">Cole o JSON</label>
+            <textarea
+              id="ingest-json"
+              className="field-input mt-2 min-h-[220px] font-mono text-xs"
+              value={ingestJson}
+              onChange={(event) => {
+                setIngestJson(event.target.value);
+                setIngestSummary(null);
+              }}
+              spellCheck={false}
+            />
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className="secondary-btn"
-              onClick={() => setSeedJson(JSON.stringify(SEED_EXAMPLE, null, 2))}
+              onClick={() => {
+                setIngestJson(JSON.stringify(INGEST_EXAMPLE, null, 2));
+                setIngestSummary(null);
+                setIngestFileName("");
+              }}
             >
               Preencher exemplo de JSON
             </button>
             <button
               type="button"
               className="primary-btn"
-              disabled={seedBusy}
-              onClick={() => void handleSeedData()}
+              disabled={ingestBusy}
+              onClick={() => void handleIngestData()}
             >
-              {seedBusy ? t("common.processing") : "Executar seed"}
+              {ingestBusy ? t("common.processing") : "Enviar JSON para ingestao"}
             </button>
           </div>
+
+          {ingestSummary ? (
+            <div className="rounded-xl border border-border/70 bg-background p-4">
+              <p className="text-sm font-semibold">Resumo da ingestao</p>
+              <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
+                <p>Itens parseados: {ingestSummary.parsedCount}</p>
+                <p>Itens enviados: {ingestSummary.sentCount}</p>
+                <p>Itens aceitos: {ingestSummary.acceptedCount}</p>
+                <p>
+                  Inseridos/atualizados: {ingestSummary.insertedCount ?? 0}/{ingestSummary.updatedCount ?? 0}
+                </p>
+              </div>
+
+              {ingestSummary.errors.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-semibold uppercase text-rose-700 dark:text-rose-300">Erros por indice</p>
+                  <ul className="space-y-2 text-sm">
+                    {ingestSummary.errors.map((error, index) => (
+                      <li
+                        key={`${error.index}-${error.field || "global"}-${index}`}
+                        className="rounded-lg border border-rose-300 bg-rose-50 p-2 text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200"
+                      >
+                        <span className="font-semibold">[{error.index >= 0 ? error.index : "global"}]</span>{" "}
+                        {error.field ? `${error.field}: ` : ""}
+                        {error.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">Sem erros por indice.</p>
+              )}
+            </div>
+          ) : null}
         </div>
       </section>
 

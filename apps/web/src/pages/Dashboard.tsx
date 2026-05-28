@@ -49,7 +49,6 @@ import { getSourceColor, getSourceLabel } from "@/lib/sourceColors";
 
 const COLORS = ["#0f766e", "#ea580c", "#0ea5e9", "#16a34a", "#db2777", "#7c3aed"];
 const LAST_SEARCH_ID_KEY = "sentimentoia_last_search_id";
-const ALL_COMPANIES_VALUE = "all";
 
 type SourceChartItem = {
   source: string;
@@ -239,6 +238,24 @@ function formatUrgencyDate(rawDate: string): string {
   return parsed.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
+function toDateInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function resolveDefaultDateRange(days = 30): { from: string; to: string } {
+  const safeDays = Math.max(1, Math.min(365, Math.round(days || 30)));
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(end.getDate() - (safeDays - 1));
+  return {
+    from: toDateInput(start),
+    to: toDateInput(end),
+  };
+}
+
 function resolvePeriodLabel(data: DashboardResponse | null): string {
   if (!data) return "Periodo nao informado";
   const explicit = String(data.period_label || data.metrics?.period_label || "").trim();
@@ -322,27 +339,40 @@ function SourceDistributionTooltip({
 export default function Dashboard() { // NOSONAR
   const { settings, t } = useAppSettings();
   const [, setLocation] = useLocation();
+  const [defaultRange] = useState(() => resolveDefaultDateRange(30));
 
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [sourceData, setSourceData] = useState<SourceChartItem[]>([]);
-  const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
+  const [selectedCompanySlug, setSelectedCompanySlug] = useState("");
+  const [fromDate, setFromDate] = useState(defaultRange.from);
+  const [toDate, setToDate] = useState(defaultRange.to);
   const { data: companiesData } = useQuery({
     queryKey: ["companies"],
     queryFn: sentimentApi.listCompanies,
     staleTime: 5 * 60 * 1000,
   });
   const companies = companiesData ?? [];
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
+  const hasRequiredFilters = Boolean(selectedCompanySlug && fromDate && toDate);
 
-  async function loadDashboard(companySlug = selectedCompanySlug) {
+  async function loadDashboard() {
+    if (!hasRequiredFilters) {
+      setData(null);
+      setSourceData([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
       const dashboardData = await sentimentApi.dashboard({
-        company_slug: companySlug === ALL_COMPANIES_VALUE ? undefined : companySlug,
+        company_slug: selectedCompanySlug,
+        from: fromDate,
+        to: toDate,
       });
       setData(dashboardData);
 
@@ -350,16 +380,7 @@ export default function Dashboard() { // NOSONAR
         localStorage.setItem(LAST_SEARCH_ID_KEY, dashboardData.search_id);
       }
 
-      const mentionsData = await sentimentApi
-        .mentions({
-          batch_id: dashboardData.batch_id ?? undefined,
-          limit: 1000,
-        })
-        .catch(() => dashboardData.mentions ?? []);
-
-      const mentionSourceData = groupMentionsBySource(
-        mentionsData.length ? mentionsData : dashboardData.mentions ?? []
-      );
+      const mentionSourceData = groupMentionsBySource(dashboardData.mentions ?? []);
       const distributionSourceData = groupSourceDistribution(
         dashboardData.metrics?.source_distribution ?? dashboardData.metrics?.sources_distribution
       );
@@ -375,8 +396,15 @@ export default function Dashboard() { // NOSONAR
   }
 
   useEffect(() => {
-    void loadDashboard(selectedCompanySlug);
-  }, [selectedCompanySlug]);
+    if (!hasRequiredFilters) {
+      setData(null);
+      setSourceData([]);
+      setLoading(false);
+      return;
+    }
+
+    void loadDashboard();
+  }, [hasRequiredFilters, selectedCompanySlug, fromDate, toDate]);
 
   const metrics = data?.metrics ?? {};
   const mentions = data?.mentions ?? [];
@@ -433,41 +461,16 @@ export default function Dashboard() { // NOSONAR
 
   const numberFormatter = useMemo(() => new Intl.NumberFormat(settings.locale), [settings.locale]);
 
-  if (loading) {
-    return (
-      <div className="app-bg min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="mx-auto h-10 w-10 animate-spin text-[color:var(--brand)]" />
-          <p className="mt-4 text-sm text-muted-foreground">{t("dashboard.loading")}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <AppShell
       title={t("nav.dashboard")}
       subtitle={
-        data
-          ? `Batch atual: ${dashboardCompanyName} - ${dashboardPeriodLabel}`
-          : t("dashboard.subtitleEmpty")
+        hasRequiredFilters && data
+          ? `Empresa atual: ${dashboardCompanyName} - ${dashboardPeriodLabel}`
+          : "Selecione uma empresa e um periodo para carregar o dashboard."
       }
       actions={
         <>
-          <Select value={selectedCompanySlug} onValueChange={setSelectedCompanySlug}>
-            <SelectTrigger className="w-[220px]" aria-label="Filtrar por empresa">
-              <SelectValue placeholder="Filtrar por empresa" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
-              {companies.map((company) => (
-                <SelectItem key={company.slug} value={company.slug}>
-                  {company.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           <button
             onClick={() => setIsDataModalOpen(true)}
             className="secondary-btn text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30"
@@ -477,20 +480,95 @@ export default function Dashboard() { // NOSONAR
           <button onClick={() => setLocation("/search")} className="secondary-btn">
             {t("dashboard.newSearch")}
           </button>
-          <button onClick={() => void loadDashboard(selectedCompanySlug)} className="primary-btn">
+          <button onClick={() => void loadDashboard()} className="primary-btn" disabled={!hasRequiredFilters || loading}>
             <RefreshCw size={16} />
             <span>{t("common.refresh")}</span>
           </button>
         </>
       }
     >
+      <section className="mb-5 app-panel p-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <label className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Empresa:</span>
+            <Select value={selectedCompanySlug || undefined} onValueChange={setSelectedCompanySlug}>
+              <SelectTrigger className="w-[220px]" aria-label="Selecionar empresa">
+                <SelectValue
+                  placeholder={
+                    companies.length > 0 ? "Selecione uma empresa" : "Nenhuma empresa cadastrada"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map((company) => (
+                  <SelectItem key={company.slug} value={company.slug}>
+                    {company.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+
+          <label className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">De:</span>
+            <input
+              type="date"
+              className="field-input h-10 py-2"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+            />
+          </label>
+
+          <label className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Ate:</span>
+            <input
+              type="date"
+              className="field-input h-10 py-2"
+              value={toDate}
+              onChange={(event) => setToDate(event.target.value)}
+            />
+          </label>
+
+          <div className="rounded-md border border-border/70 bg-background/70 px-3 py-2 text-sm text-muted-foreground">
+            <p>Periodo aplicado</p>
+            <p className="font-medium text-foreground">
+              {fromDate && toDate ? `${fromDate} a ${toDate}` : "Defina as datas"}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => void loadDashboard()}
+              disabled={!hasRequiredFilters || loading}
+            >
+              <RefreshCw size={16} /> Aplicar filtros
+            </button>
+          </div>
+        </div>
+      </section>
+
       {error ? (
         <div className="mb-6 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200">
           {error}
         </div>
       ) : null}
 
-      {totalMentions === 0 ? (
+      {!selectedCompanySlug ? (
+        <div className="app-panel mx-auto max-w-3xl p-10 text-center">
+          <SearchIcon className="mx-auto mb-4 h-10 w-10 text-[color:var(--brand)]" />
+          <h2 className="text-2xl font-semibold">Selecione uma empresa para iniciar</h2>
+          <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
+            O dashboard so carrega dados apos a escolha explicita da empresa e do periodo.
+          </p>
+        </div>
+      ) : loading ? (
+        <div className="app-panel mx-auto max-w-3xl p-10 text-center">
+          <RefreshCw className="mx-auto h-10 w-10 animate-spin text-[color:var(--brand)]" />
+          <p className="mt-4 text-sm text-muted-foreground">{t("dashboard.loading")}</p>
+        </div>
+      ) : totalMentions === 0 ? (
         <div className="app-panel mx-auto max-w-3xl p-10 text-center">
           <SearchIcon className="mx-auto mb-4 h-10 w-10 text-[color:var(--brand)]" />
           <h2 className="text-2xl font-semibold">{t("dashboard.emptyTitle")}</h2>
@@ -682,7 +760,7 @@ export default function Dashboard() { // NOSONAR
         isOpen={isDataModalOpen}
         onClose={() => setIsDataModalOpen(false)}
         onDataDeleted={() => {
-          void loadDashboard(selectedCompanySlug);
+          void loadDashboard();
         }}
       />
     </AppShell>

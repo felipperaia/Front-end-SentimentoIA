@@ -6,6 +6,7 @@ const configuredApiBaseUrl = String(import.meta.env.VITE_API_URL || "")
 const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 90000);
 const configuredRetryAttempts = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS || 2);
 const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS || 1000);
+const configuredApiIngestPath = String(import.meta.env.VITE_API_INGEST_PATH || "/api/ingest").trim();
 
 export const API_BASE_URL = configuredApiBaseUrl;
 export const AUTH_TOKEN_KEY = "sentimentoia_access_token";
@@ -39,7 +40,12 @@ const API_RETRY_ATTEMPTS = Number.isFinite(configuredRetryAttempts)
 const API_RETRY_DELAY_MS = Number.isFinite(configuredRetryDelayMs)
   ? Math.max(100, configuredRetryDelayMs)
   : 1000;
-const LONG_PATHS = ["/api/search", "/api/scrape"] as const;
+let resolvedApiIngestPath = configuredApiIngestPath || "/api/ingest";
+if (!resolvedApiIngestPath.startsWith("/")) {
+  resolvedApiIngestPath = `/${resolvedApiIngestPath}`;
+}
+const API_INGEST_PATH = resolvedApiIngestPath.replace(/\/+$/, "") || "/api/ingest";
+const LONG_PATHS = ["/api/search", API_INGEST_PATH] as const;
 const LONG_REQUEST_TIMEOUT_MS = 120_000;
 const SEARCH_TIMEOUT_MESSAGE =
   "A busca demorou mais que o esperado. Tente selecionar menos fontes ou reduza o periodo de busca.";
@@ -200,7 +206,7 @@ function resolveAiSpecificError(status: number | undefined, detailText: string):
   }
 
   if (detailText && matchesAnyPattern(detailText, AI_UPSTREAM_FAILURE_PATTERNS)) {
-    return "api.aiFallback";
+    return "api.aiUpstreamError";
   }
 
   return null;
@@ -239,7 +245,7 @@ function resolveFriendlyErrorMessage(params: {
   }
 
   if (detailText && matchesAnyPattern(detailText, INTERNAL_ERROR_DETAIL_PATTERNS)) {
-    return aiRequest ? tApi("api.aiFallback") : tApi(params.fallbackKey);
+    return aiRequest ? tApi("api.aiUpstreamError") : tApi(params.fallbackKey);
   }
 
   if (detailText) {
@@ -902,6 +908,21 @@ function normalizeSearchErrors(
     .filter(Boolean);
 }
 
+function normalizeIngestErrors(errors: unknown): IngestItemError[] {
+  return ensureArray<any>(errors)
+    .map((entry) => {
+      const raw = ensureObject(entry);
+      const rawIndex = asNumber(raw.index ?? raw.item_index ?? raw.row ?? raw.position, -1);
+      return {
+        index: Number.isFinite(rawIndex) ? Math.round(rawIndex) : -1,
+        field: asNullableString(raw.field || raw.path) ?? undefined,
+        message: asString(raw.error || raw.message || raw.detail, "Erro de validacao"),
+        code: asNullableString(raw.code) ?? undefined,
+      };
+    })
+    .filter((entry) => entry.message.length > 0);
+}
+
 function normalizeChatThread(item: unknown): ChatThread {
   const raw = ensureObject(item);
   const threadId = asString(raw.thread_id || raw.id, "");
@@ -917,18 +938,101 @@ function normalizeChatThread(item: unknown): ChatThread {
   };
 }
 
-function normalizeChatMessage(item: unknown): ChatMessage {
-  const raw = ensureObject(item);
+function resolveChatMessageContent(raw: Record<string, any>): string {
+  const directCandidates = [
+    raw.content,
+    raw.final_answer,
+    raw.final_response,
+    raw.answer,
+    raw.message,
+    raw.text,
+  ];
+
+  for (const candidate of directCandidates) {
+    const resolved = asString(candidate, "");
+    if (resolved) return resolved;
+  }
+
+  const nestedResponse = ensureObject(raw.response);
+  const nestedMessage = ensureObject(raw.message);
+  const nestedCandidates = [
+    nestedResponse.content,
+    nestedResponse.text,
+    nestedResponse.answer,
+    nestedResponse.final_answer,
+    nestedMessage.content,
+    nestedMessage.text,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    const resolved = asString(candidate, "");
+    if (resolved) return resolved;
+  }
+
+  return "";
+}
+
+function normalizeChatMessage(
+  item: unknown,
+  fallback: { role?: "system" | "user" | "assistant"; content?: string; threadId?: string } = {}
+): ChatMessage {
+  const raw = typeof item === "string" ? { content: item } : ensureObject(item);
   const messageId = asString(raw.message_id || raw.id, "");
-  const role = asString(raw.role, "assistant").toLowerCase();
+  const role = asString(raw.role, fallback.role || "assistant").toLowerCase();
+  const content = resolveChatMessageContent(raw) || asString(fallback.content, "");
   return {
     id: asString(raw.id || messageId, messageId || "unknown"),
     message_id: messageId || asString(raw.id, "unknown"),
-    thread_id: asString(raw.thread_id, ""),
+    thread_id: asString(raw.thread_id || raw.threadId || fallback.threadId, ""),
     role: role === "system" || role === "user" || role === "assistant" ? role : "assistant",
-    content: asString(raw.content, ""),
+    content,
     created_at: asNullableString(raw.created_at),
   };
+}
+
+function resolveChatMessagePayload(payload: Record<string, any>, role: "user" | "assistant"): unknown {
+  const candidates =
+    role === "user"
+      ? [payload.user_message, payload.userMessage, payload.input_message]
+      : [
+          payload.assistant_message,
+          payload.assistantMessage,
+          payload.final_message,
+          payload.finalMessage,
+          payload.response_message,
+          payload.responseMessage,
+          payload.response,
+          payload.assistant,
+        ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      const content = asString(candidate, "");
+      if (content) {
+        return {
+          role,
+          content,
+        };
+      }
+      continue;
+    }
+
+    if (candidate && typeof candidate === "object") {
+      return candidate;
+    }
+  }
+
+  if (role === "assistant") {
+    const fallbackContent = resolveChatMessageContent(payload);
+    if (fallbackContent) {
+      return {
+        role: "assistant",
+        content: fallbackContent,
+      };
+    }
+  }
+
+  return null;
 }
 
 function normalizeDashboardMetrics(rawMetrics: unknown, mentions: Mention[] = []): Partial<DashboardMetrics> {
@@ -994,23 +1098,6 @@ function normalizeDashboardMetrics(rawMetrics: unknown, mentions: Mention[] = []
     period_from: normalizeDateLike(raw.period_from || raw.from || rootPeriod.from),
     period_to: normalizeDateLike(raw.period_to || raw.to || rootPeriod.to),
     recent_mentions: ensureArray<any>(raw.recent_mentions).map(normalizeMention),
-  };
-}
-
-function normalizeScrapeItem(item: unknown, fallbackSource: string): ScrapeItem {
-  const raw = ensureObject(item);
-  return {
-    source: asString(raw.source, fallbackSource),
-    title: asString(raw.title, "Resultado"),
-    url: asString(raw.url || raw.canonical_url, ""),
-    snippet: asString(raw.snippet || raw.text, ""),
-    author: asNullableString(raw.author) ?? null,
-    published_at: asNullableString(raw.published_at) ?? null,
-    canonical_url: asNullableString(raw.canonical_url) ?? null,
-    content_hash: asNullableString(raw.content_hash),
-    quality_score: raw.quality_score === undefined || raw.quality_score === null ? undefined : asNumber(raw.quality_score, 0),
-    source_priority:
-      raw.source_priority === undefined || raw.source_priority === null ? undefined : asNumber(raw.source_priority, 0),
   };
 }
 
@@ -1509,81 +1596,20 @@ export type SearchResponse = {
   errors?: Array<{ source?: string; error?: string; reason?: string; timeout?: boolean } | string>;
 };
 
-export type ScrapeSource =
-  | "reclameaqui"
-  | "reddit"
-  | "youtube"
-  | "appstore"
-  | "playstore"
-  | "glassdoor"
-  | "trustpilot"
-  | "mastodon"
-  | "web"
-  | "google"
-  | "x"
-  | "twitter";
-
-export type ScrapeItem = {
-  source: string;
-  title: string;
-  url: string;
-  snippet: string;
-  author?: string | null;
-  published_at?: string | null;
-  canonical_url?: string | null;
-  content_hash?: string;
-  quality_score?: number;
-  source_priority?: number;
+export type IngestItemError = {
+  index: number;
+  field?: string;
+  message: string;
+  code?: string;
 };
 
-export type ScrapeResponse = {
-  query: string;
-  sources: string[];
-  limit_per_source: number;
-  status?: ExecutionStatus;
-  partial_success?: boolean;
-  status_summary?: ExecutionStatusSummary;
-  total: number;
-  results: Record<string, ScrapeItem[]>;
-  errors: Array<{ source: string; error: string; reason?: string; timeout?: boolean }>;
-  metadata?: {
-    incremental_mode?: boolean;
-    max_total_items?: number;
-    sources?: Array<{
-      name: string;
-      active: boolean;
-      priority: number;
-      type: string;
-      parser: string;
-      fetch_mode: string;
-      rate_limit_per_minute: number;
-      deprecated?: boolean;
-    }>;
-  };
-};
-
-export type IntegrationSourceMetadata = {
-  name: string;
-  type: string;
-  base_url?: string;
-  active: boolean;
-  priority: number;
-  fetch_mode: string;
-  rate_limit_per_minute: number;
-  parser: string;
-  deprecated?: boolean;
-};
-
-export type IntegrationsStatusResponse = {
-  scraping_enabled: boolean;
-  scraper_delay_seconds: number;
-  scraper_default_limit: number;
-  scraper_default_sources: string[];
-  scraper_active_sources: string[];
-  scraper_source_metadata: IntegrationSourceMetadata[];
-  mongodb_configured: boolean;
-  llm?: Record<string, any>;
-  external_source_apis_removed?: boolean;
+export type IngestResponse = {
+  received: number;
+  accepted: number;
+  inserted?: number;
+  updated?: number;
+  errors: IngestItemError[];
+  message?: string;
 };
 
 function normalizeExecutionStatus(value: unknown, fallback: ExecutionStatus = "success"): ExecutionStatus {
@@ -1682,7 +1708,8 @@ export const sentimentApi = {
     brand_name?: string;
     query?: string;
     sources: string[];
-    period_days?: number;
+    from?: string;
+    to?: string;
     locality?: string;
     replace_existing?: boolean;
     limit?: number;
@@ -1715,62 +1742,6 @@ export const sentimentApi = {
       alerts: ensureArray<any>(data.alerts),
       errors: normalizeSearchErrors(data.errors),
     } as SearchResponse;
-  },
-  async scrape(payload: { query: string; sources: ScrapeSource[]; limit_per_source?: number; limit?: number }) {
-    const raw = await apiFetch<any>("/api/scrape", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-
-    const data = ensureObject(raw);
-    const requestedSources = payload.sources.map((source) => asString(source));
-    const rawResults = ensureObject(data.results);
-    const results: Record<string, ScrapeItem[]> = {};
-
-    for (const source of requestedSources) {
-      const sourceItems = ensureArray<any>(rawResults[source]);
-      results[source] = sourceItems.map((item) => normalizeScrapeItem(item, source));
-    }
-
-    for (const [source, sourceItems] of Object.entries(rawResults)) {
-      if (!results[source]) {
-        results[source] = ensureArray<any>(sourceItems).map((item) => normalizeScrapeItem(item, source));
-      }
-    }
-
-    const errors = ensureArray<any>(data.errors).map((entry) => {
-      const item = ensureObject(entry);
-      return {
-        source: asString(item.source, "unknown"),
-        error: asString(item.error || item.detail || item.message, "Falha temporaria na coleta da fonte"),
-        reason: asNullableString(item.reason),
-        timeout: Boolean(item.timeout),
-      };
-    });
-
-    const computedTotal = asNumber(data.total, Object.values(results).reduce((acc, items) => acc + items.length, 0));
-    let fallbackStatus: ExecutionStatus = "empty";
-    if (computedTotal > 0) {
-      fallbackStatus = errors.length > 0 ? "partial_success" : "success";
-    } else if (errors.length > 0) {
-      fallbackStatus = "failed";
-    }
-    const statusSummary = normalizeStatusSummary(data.status_summary);
-    const status = normalizeExecutionStatus(data.status || statusSummary?.status, fallbackStatus);
-    const partialSuccess = Boolean(data.partial_success ?? statusSummary?.partial_success ?? status === "partial_success");
-
-    return {
-      query: asString(data.query, payload.query),
-      sources: ensureArray<string>(data.sources).length > 0 ? ensureArray<string>(data.sources) : requestedSources,
-      limit_per_source: asNumber(data.limit_per_source, payload.limit_per_source || payload.limit || 5),
-      status,
-      partial_success: partialSuccess,
-      status_summary: statusSummary,
-      total: computedTotal,
-      results,
-      errors,
-      metadata: ensureObject(data.metadata) as ScrapeResponse["metadata"],
-    };
   },
   async mentions(params?: { batch_id?: string; search_id?: string; status?: string; sentiment?: string; limit?: number }) {
     const query = new URLSearchParams();
@@ -1839,13 +1810,27 @@ export const sentimentApi = {
       .map((item) => normalizeCompany(item))
       .filter((item): item is CompanyItem => item !== null);
   },
-  async generateInsight(payload?: { batch_id?: string; force?: boolean }) {
+  async generateInsight(payload?: {
+    batch_id?: string;
+    force?: boolean;
+    company_id?: string;
+    company_slug?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const requestPayload: Record<string, unknown> = {
+      batch_id: payload?.batch_id ?? null,
+      force: Boolean(payload?.force),
+    };
+
+    if (payload?.company_id) requestPayload.company_id = payload.company_id;
+    if (payload?.company_slug) requestPayload.company_slug = payload.company_slug;
+    if (payload?.from) requestPayload.from = payload.from;
+    if (payload?.to) requestPayload.to = payload.to;
+
     const raw = await apiFetch<any>("/api/insights/generate", {
       method: "POST",
-      body: JSON.stringify({
-        batch_id: payload?.batch_id ?? null,
-        force: Boolean(payload?.force),
-      }),
+      body: JSON.stringify(requestPayload),
     });
     const data = ensureObject(raw);
     return {
@@ -1951,7 +1936,7 @@ export const sentimentApi = {
     );
     const data = ensureObject(raw);
     return {
-      items: ensureArray<any>(data.items).map(normalizeChatMessage),
+      items: ensureArray<any>(data.items).map((item) => normalizeChatMessage(item)),
     };
   },
   async sendChatMessage(threadId: string, content: string) {
@@ -1961,10 +1946,27 @@ export const sentimentApi = {
     });
 
     const data = ensureObject(raw);
+    const threadPayload = ensureObject(data.thread);
+    const resolvedThreadId = asString(threadPayload.thread_id || threadPayload.id || threadId, threadId);
+    const userPayload = resolveChatMessagePayload(data, "user");
+    const assistantPayload = resolveChatMessagePayload(data, "assistant");
+
     return {
-      thread: normalizeChatThread(data.thread),
-      user_message: normalizeChatMessage(data.user_message),
-      assistant_message: normalizeChatMessage(data.assistant_message),
+      thread: normalizeChatThread({
+        ...threadPayload,
+        id: asString(threadPayload.id, resolvedThreadId),
+        thread_id: resolvedThreadId,
+      }),
+      user_message: normalizeChatMessage(userPayload, {
+        role: "user",
+        content,
+        threadId: resolvedThreadId,
+      }),
+      assistant_message: normalizeChatMessage(assistantPayload, {
+        role: "assistant",
+        content: resolveChatMessageContent(data),
+        threadId: resolvedThreadId,
+      }),
     };
   },
   deleteChatThread(threadId: string) {
@@ -2119,11 +2121,36 @@ export const sentimentApi = {
       total: Math.max(0, Math.round(asNumber(data.total, items.length))),
     };
   },
-  seedDemoData(payload: Record<string, unknown>) {
-    return apiFetch<{ ok: boolean; message?: string }>("/api/demo/seed", {
+  async ingest(payload: Record<string, unknown> | Record<string, unknown>[]): Promise<IngestResponse> {
+    const raw = await apiFetch<any>(API_INGEST_PATH, {
       method: "POST",
       body: JSON.stringify(payload),
     });
+
+    const data = ensureObject(raw);
+    const errors = normalizeIngestErrors(data.errors || data.validation_errors || data.invalid_items);
+    const payloadItemsCount = Array.isArray(payload)
+      ? payload.length
+      : ensureArray<any>(ensureObject(payload).mentions).length;
+    const received = Math.max(
+      0,
+      Math.round(
+        asNumber(data.received ?? data.total_received ?? data.total ?? data.count, payloadItemsCount)
+      )
+    );
+    const acceptedFallback = Math.max(received - errors.length, 0);
+
+    return {
+      received,
+      accepted: Math.max(
+        0,
+        Math.round(asNumber(data.accepted ?? data.success_count ?? data.inserted, acceptedFallback))
+      ),
+      inserted: data.inserted === undefined ? undefined : Math.max(0, Math.round(asNumber(data.inserted, 0))),
+      updated: data.updated === undefined ? undefined : Math.max(0, Math.round(asNumber(data.updated, 0))),
+      errors,
+      message: asNullableString(data.message) ?? undefined,
+    };
   },
   privacyConsent(payload: PrivacyConsentPayload) {
     const preferences = payload.consent;
@@ -2146,21 +2173,6 @@ export const sentimentApi = {
       }),
     });
   },
-  async integrationsStatus() {
-    const raw = await apiFetch<any>("/api/status/integrations");
-    const data = ensureObject(raw);
-    return {
-      scraping_enabled: Boolean(data.scraping_enabled),
-      scraper_delay_seconds: asNumber(data.scraper_delay_seconds, 0),
-      scraper_default_limit: asNumber(data.scraper_default_limit, 5),
-      scraper_default_sources: ensureArray<string>(data.scraper_default_sources),
-      scraper_active_sources: ensureArray<string>(data.scraper_active_sources),
-      scraper_source_metadata: ensureArray<IntegrationSourceMetadata>(data.scraper_source_metadata),
-      mongodb_configured: Boolean(data.mongodb_configured),
-      llm: ensureObject(data.llm),
-      external_source_apis_removed: Boolean(data.external_source_apis_removed),
-    };
-  },
   async searchHistory(limit = 20) {
     const raw = await apiFetch<any>(
       `/api/search/history?limit=${Math.max(1, Math.min(limit, 100))}`
@@ -2177,18 +2189,6 @@ export const sentimentApi = {
         };
       }),
     };
-  },
-  deleteConversation(id: string) {
-    return apiFetch<{ ok: boolean }>(`/api/chat/threads/${encodeURIComponent(id)}`, { method: "DELETE" });
-  },
-  deleteMessage(threadId: string, messageId: string) {
-    return apiFetch<{ ok: boolean }>(
-      `/api/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
-      { method: "DELETE" }
-    );
-  },
-  deleteAllConversations() {
-    return apiFetch<{ ok: boolean }>("/api/chat/threads", { method: "DELETE" });
   },
   deleteSearch(id: string) {
     return apiFetch<{ ok: boolean }>(`/api/searches/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -2224,13 +2224,8 @@ export async function downloadReport(
   if (params?.from) query.set("from", params.from);
   if (params?.to) query.set("to", params.to);
 
-  const hasCompanyFilter = Boolean(params?.company_id || params?.company_slug || params?.from || params?.to);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  let endpoint = `/api/reports/export/${format}${suffix}`;
-  if (!hasCompanyFilter && params?.search_id) {
-    endpoint = `/api/reports/${format}${suffix}`;
-  }
-  const { blob, filename } = await apiFetchBlob(endpoint);
+  const { blob, filename } = await apiFetchBlob(`/api/reports/export/${format}${suffix}`);
   const resolvedFilename =
     filename ||
     params?.filename ||

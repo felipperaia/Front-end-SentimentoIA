@@ -89,12 +89,12 @@ Saída do build: dist/public
 ## Variáveis principais
 
 - VITE_API_URL: URL pública do backend
+- VITE_API_INGEST_PATH: caminho canônico do endpoint de ingestão JSON
 - VITE_API_TIMEOUT_MS: timeout das requisições
 - VITE_API_RETRY_ATTEMPTS: tentativas extras em erro transitório
 - VITE_API_RETRY_DELAY_MS: atraso entre tentativas
 - VITE_ENABLE_CHAT: liga/desliga chat
 - VITE_ENABLE_NPS: liga/desliga NPS
 - VITE_ENABLE_PWA: liga/desliga service worker
-- VITE_PRIVACY_POLICY_URL: URL da política de privacidade
 - VITE_DEFAULT_LOCALE: idioma inicial (pt-BR ou en-US)
 - VITE_GOOGLE_MAPS_API_KEY: chave de mapa (opcional)

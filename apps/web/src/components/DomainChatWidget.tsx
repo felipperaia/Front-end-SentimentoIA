@@ -114,25 +114,31 @@ export function DomainChatWidget() { // NOSONAR
       try {
         const response = await sentimentApi.sendChatMessage(activeThreadId, trimmed);
 
-        const threadId = response.thread?.thread_id || response.thread?.id;
-        const hasCompletePayload = Boolean(response.user_message?.id || response.user_message?.message_id) &&
-          Boolean(response.assistant_message?.id || response.assistant_message?.message_id);
+        const nextThreadId = response.thread?.thread_id || response.thread?.id || activeThreadId;
+        const title = response.thread?.title || t("chat.threadFallback");
 
-        if (threadId) {
-          const title = response.thread?.title || t("chat.threadFallback");
-          setThreadOptions((current) => {
-            const next = current.filter((item) => item.id !== threadId);
-            return [{ id: threadId, label: title }, ...next];
-          });
-          setActiveThreadId(threadId);
-          await loadMessages(threadId);
-        } else if (hasCompletePayload) {
-          await loadMessages(activeThreadId);
-        } else {
-          await loadMessages(activeThreadId);
+        setThreadOptions((current) => {
+          const next = current.filter((item) => item.id !== nextThreadId);
+          return [{ id: nextThreadId, label: title }, ...next];
+        });
+        setActiveThreadId(nextThreadId);
+
+        const nextBackendMessages = [
+          ...backendMessages,
+          response.user_message,
+          response.assistant_message,
+        ].filter((item) => Boolean(String(item?.content || "").trim()));
+
+        setBackendMessages(nextBackendMessages);
+        setMessages(mapMessages(nextBackendMessages));
+
+        try {
+          await loadMessages(nextThreadId);
+        } catch {
+          // Mantem as mensagens locais como fonte de verdade se o refresh falhar.
         }
-      } catch {
-        toast.error("Erro ao conectar com o assistente. Tente novamente.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Erro ao conectar com o assistente. Tente novamente.");
         if (activeThreadId) {
           try {
             await loadMessages(activeThreadId);
@@ -144,7 +150,7 @@ export function DomainChatWidget() { // NOSONAR
         setSending(false);
       }
     },
-    [activeThreadId, loadMessages, t]
+    [activeThreadId, backendMessages, loadMessages, t]
   );
 
   async function handleThreadChange(nextThreadId: string) {

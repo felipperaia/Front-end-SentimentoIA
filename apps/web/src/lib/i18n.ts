@@ -629,21 +629,21 @@ export const TRANSLATIONS = {
     "pt-BR": "Erro na busca.",
     "en-US": "Search failed.",
   },
-  "search.scrapingMode": {
-    "pt-BR": "Fontes operam via scraping interno com deduplicação incremental no Mongo.",
-    "en-US": "Sources run through internal scraping with incremental Mongo deduplication.",
+  "search.canonicalMode": {
+    "pt-BR": "Busca executada apenas pelo fluxo canônico de importacao do secundario para o primario.",
+    "en-US": "Search runs only through the canonical import flow from secondary to primary.",
   },
   "search.limitPerSource": {
     "pt-BR": "Limite por fonte",
     "en-US": "Per-source limit",
   },
   "search.limitHelp": {
-    "pt-BR": "Para evitar sobrecarga, o scraping retorna poucos itens por fonte.",
-    "en-US": "To avoid overload, scraping returns only a few items per source.",
+    "pt-BR": "Define o teto de menções consideradas por fonte na operacao.",
+    "en-US": "Sets the maximum mentions considered per source in the operation.",
   },
   "search.loadingHint": {
-    "pt-BR": "Coletando dados por scraping. Isso pode levar alguns segundos.",
-    "en-US": "Collecting data via scraping. This may take a few seconds.",
+    "pt-BR": "Executando busca e importando dados. Isso pode levar alguns segundos.",
+    "en-US": "Running search and importing data. This may take a few seconds.",
   },
   "search.resultsBySource": {
     "pt-BR": "Resultados por fonte",
@@ -1301,7 +1301,7 @@ export const TRANSLATIONS = {
     "pt-BR": "A IA está temporariamente indisponível. Tente novamente em instantes.",
     "en-US": "AI is temporarily unavailable. Please try again shortly.",
   },
-  "api.aiFallback": {
+  "api.aiUpstreamError": {
     "pt-BR": "Nao foi possivel concluir a resposta de IA no momento. Tente novamente em instantes.",
     "en-US": "Unable to complete the AI response right now. Please try again shortly.",
   },

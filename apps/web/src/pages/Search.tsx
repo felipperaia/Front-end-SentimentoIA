@@ -4,9 +4,6 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
   sentimentApi,
   type Mention,
-  type ScrapeItem,
-  type ScrapeResponse,
-  type ScrapeSource,
   type SearchResponse,
 } from "@/lib/api";
 import { getSourceLabel } from "@/lib/sourceColors";
@@ -18,25 +15,7 @@ import { useLocation } from "wouter";
 const SEARCH_COMPLETED_EVENT = "sentimentoia:search-completed";
 const LAST_SEARCH_ID_KEY = "sentimentoia_last_search_id";
 
-type SourceOption = {
-  id: ScrapeSource;
-  name: string;
-  icon: string;
-};
-
-const FALLBACK_SOURCE_OPTIONS: SourceOption[] = [
-  { id: "reddit", name: getSourceLabel("reddit"), icon: "R" },
-  { id: "youtube", name: getSourceLabel("youtube"), icon: "Y" },
-  { id: "appstore", name: getSourceLabel("appstore"), icon: "A" },
-  { id: "playstore", name: getSourceLabel("playstore"), icon: "P" },
-  { id: "trustpilot", name: getSourceLabel("trustpilot"), icon: "T" },
-  { id: "glassdoor", name: getSourceLabel("glassdoor"), icon: "G" },
-  { id: "reclameaqui", name: getSourceLabel("reclameaqui"), icon: "RA" },
-  { id: "mastodon", name: getSourceLabel("mastodon"), icon: "M" },
-  { id: "web", name: getSourceLabel("web"), icon: "W" },
-];
-
-const SOURCE_TYPE_GUARD: Record<ScrapeSource, true> = {
+const SOURCE_TYPE_GUARD = {
   reclameaqui: true,
   reddit: true,
   youtube: true,
@@ -49,13 +28,33 @@ const SOURCE_TYPE_GUARD: Record<ScrapeSource, true> = {
   google: true,
   x: true,
   twitter: true,
+} as const;
+
+type SearchSource = keyof typeof SOURCE_TYPE_GUARD;
+
+type SourceOption = {
+  id: SearchSource;
+  name: string;
+  icon: string;
 };
 
-function asScrapeSource(source: string): ScrapeSource | null {
+const DEFAULT_SOURCE_OPTIONS: SourceOption[] = [
+  { id: "reddit", name: getSourceLabel("reddit"), icon: "R" },
+  { id: "youtube", name: getSourceLabel("youtube"), icon: "Y" },
+  { id: "appstore", name: getSourceLabel("appstore"), icon: "A" },
+  { id: "playstore", name: getSourceLabel("playstore"), icon: "P" },
+  { id: "trustpilot", name: getSourceLabel("trustpilot"), icon: "T" },
+  { id: "glassdoor", name: getSourceLabel("glassdoor"), icon: "G" },
+  { id: "reclameaqui", name: getSourceLabel("reclameaqui"), icon: "RA" },
+  { id: "mastodon", name: getSourceLabel("mastodon"), icon: "M" },
+  { id: "web", name: getSourceLabel("web"), icon: "W" },
+];
+
+function asSearchSource(source: string): SearchSource | null {
   const normalized = String(source || "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "") as ScrapeSource;
+    .replace(/\s+/g, "") as SearchSource;
 
   if (SOURCE_TYPE_GUARD[normalized]) {
     return normalized;
@@ -64,13 +63,7 @@ function asScrapeSource(source: string): ScrapeSource | null {
   return null;
 }
 
-function iconFromSourceName(name: string): string {
-  const normalized = String(name || "").trim().toUpperCase();
-  if (normalized.startsWith("RECLAME")) return "RA";
-  return normalized.slice(0, 1) || "?";
-}
-
-function resolveSelectedSources(current: ScrapeSource[], dynamicOptions: SourceOption[]): ScrapeSource[] {
+function resolveSelectedSources(current: SearchSource[], dynamicOptions: SourceOption[]): SearchSource[] {
   const dynamicSourceIds = new Set(dynamicOptions.map((item) => item.id));
   const validCurrent = current.filter((source) => dynamicSourceIds.has(source));
 
@@ -81,19 +74,13 @@ function resolveSelectedSources(current: ScrapeSource[], dynamicOptions: SourceO
   return dynamicOptions.slice(0, 3).map((item) => item.id);
 }
 
-function normalizeSource(source: string): ScrapeSource | null {
-  return asScrapeSource(
+function normalizeSource(source: string): SearchSource | null {
+  return asSearchSource(
     String(source || "")
       .trim()
       .toLowerCase()
       .replace(/\s+/g, "")
   );
-}
-
-function scrapeItemTitle(item: ScrapeItem): string {
-  if (item.title) return item.title;
-  if (item.author) return item.author;
-  return item.url || "Resultado";
 }
 
 function searchStatusLabel(status: SearchResponse["status"] | undefined): string {
@@ -122,13 +109,27 @@ function getSearchProgressMessage(elapsedSeconds: number): string {
   return "Finalizando e agregando resultados...";
 }
 
+function formatDateForApi(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function resolveDateRangeFromDays(days: number): { from: string; to: string } {
+  const safeDays = Math.max(1, Math.min(365, Math.round(days || 30)));
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(to.getDate() - (safeDays - 1));
+  return {
+    from: formatDateForApi(from),
+    to: formatDateForApi(to),
+  };
+}
+
 export default function SearchPage() {
   const { t } = useAppSettings();
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
-  const [sourceOptions, setSourceOptions] = useState<SourceOption[]>(FALLBACK_SOURCE_OPTIONS);
-  const [selectedSources, setSelectedSources] = useState<ScrapeSource[]>(
-    FALLBACK_SOURCE_OPTIONS.slice(0, 3).map((item) => item.id)
+  const [selectedSources, setSelectedSources] = useState<SearchSource[]>(
+    DEFAULT_SOURCE_OPTIONS.slice(0, 3).map((item) => item.id)
   );
   const [limitPerSource, setLimitPerSource] = useState(5);
   const [periodDays, setPeriodDays] = useState(30);
@@ -138,12 +139,9 @@ export default function SearchPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0);
   const [lastResult, setLastResult] = useState<SearchResponse | null>(null);
-  const [lastScrape, setLastScrape] = useState<ScrapeResponse | null>(null);
 
   useEffect(() => {
-    const options = FALLBACK_SOURCE_OPTIONS;
-    setSourceOptions(options);
-    setSelectedSources((current) => resolveSelectedSources(current, options));
+    setSelectedSources((current) => resolveSelectedSources(current, DEFAULT_SOURCE_OPTIONS));
   }, []);
 
   useEffect(() => {
@@ -177,24 +175,11 @@ export default function SearchPage() {
     return groups;
   }, [lastResult?.mentions]);
 
-  const groupedScrape = useMemo(() => {
-    const groups: Record<string, ScrapeItem[]> = {};
-    const payload = lastScrape?.results || {};
-
-    for (const [source, items] of Object.entries(payload)) {
-      const normalized = normalizeSource(source);
-      if (!normalized) continue;
-      groups[normalized] = Array.isArray(items) ? items : [];
-    }
-
-    return groups;
-  }, [lastScrape?.results]);
-
-  const searchErrors = [...(lastScrape?.errors ?? []), ...(lastResult?.errors ?? [])];
-  const effectiveStatus: SearchResponse["status"] | undefined = lastResult?.status || lastScrape?.status;
-  const effectiveStatusSummary = lastResult?.status_summary || lastScrape?.status_summary;
-  const effectiveTotal = lastResult?.total ?? lastScrape?.total ?? 0;
-  const hasRunData = Boolean(lastResult || lastScrape);
+  const searchErrors = lastResult?.errors ?? [];
+  const effectiveStatus: SearchResponse["status"] | undefined = lastResult?.status;
+  const effectiveStatusSummary = lastResult?.status_summary;
+  const effectiveTotal = lastResult?.total ?? 0;
+  const hasRunData = Boolean(lastResult);
   const sourceStatusItems = effectiveStatusSummary?.source_status || [];
   const timeoutSourceSet = new Set([
     ...sourceStatusItems.filter((item) => item.timeout).map((item) => item.source),
@@ -205,6 +190,7 @@ export default function SearchPage() {
     .filter((item) => !item.ok && !timeoutSourceSet.has(item.source))
     .map((item) => item.source);
   const timeoutSources = Array.from(timeoutSourceSet);
+  const searchDateRange = useMemo(() => resolveDateRangeFromDays(periodDays), [periodDays]);
   const searchingHint = getSearchProgressMessage(searchElapsedSeconds);
   const loadingPanel = (() => {
     if (isSearching) {
@@ -235,9 +221,9 @@ export default function SearchPage() {
     return null;
   })();
 
-  const sources = sourceOptions;
+  const sources = DEFAULT_SOURCE_OPTIONS;
 
-  const toggleSource = (sourceId: ScrapeSource) => {
+  const toggleSource = (sourceId: SearchSource) => {
     setSelectedSources((prev) =>
       prev.includes(sourceId)
         ? prev.filter((id) => id !== sourceId)
@@ -248,12 +234,65 @@ export default function SearchPage() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    toast.info("Coleta externa desativada. Use o fluxo de seed em Configuracoes.");
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) {
+      return;
+    }
+
+    if (selectedSources.length === 0) {
+      toast.error(t("search.selectSource"));
+      return;
+    }
+
+    const { from, to } = resolveDateRangeFromDays(periodDays);
+
+    setLoading(true);
+    setIsSearching(true);
     setLastResult(null);
-    setLastScrape(null);
-    setLoading(false);
-    setIsSearching(false);
-    setLocation("/settings#seeds");
+
+    try {
+      const response = await sentimentApi.search({
+        brand_name: normalizedQuery,
+        query: normalizedQuery,
+        sources: selectedSources,
+        from,
+        to,
+        locality: locality.trim() || undefined,
+        replace_existing: replaceExisting,
+        limit: limitPerSource,
+      });
+
+      setLastResult(response);
+
+      if (response.search_id) {
+        localStorage.setItem(LAST_SEARCH_ID_KEY, response.search_id);
+      }
+
+      globalThis.dispatchEvent(
+        new CustomEvent(SEARCH_COMPLETED_EVENT, {
+          detail: {
+            searchId: response.search_id || undefined,
+            mentionsCount: response.mentions.length,
+            total: response.total,
+          },
+        })
+      );
+
+      if (response.status === "failed") {
+        toast.error(response.status_summary?.message || t("search.error"));
+      } else if (response.status === "empty" || response.total === 0) {
+        toast.info(response.status_summary?.message || t("search.emptyResult"));
+      } else if (response.status === "partial_success") {
+        toast.warning(response.status_summary?.message || "Busca concluida com falhas em algumas fontes.");
+      } else {
+        toast.success(response.status_summary?.message || `Busca concluida com ${response.total} menções.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("search.error"));
+    } finally {
+      setLoading(false);
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -325,10 +364,10 @@ export default function SearchPage() {
                 onChange={(event) => setReplaceExisting(event.target.checked)}
                 disabled={loading}
               />
-              <span>Forcar nova coleta (sem cache)</span>
+              <span>Forcar nova importacao (sem cache)</span>
             </label>
 
-            <p className="mt-2 text-xs text-muted-foreground">{t("search.scrapingMode")}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{t("search.canonicalMode")}</p>
           </article>
 
           <article className="app-panel p-6 md:p-7">
@@ -374,34 +413,8 @@ export default function SearchPage() {
               <div className="mt-4 space-y-4">
                 {sources.map((source) => {
                   const mentionItems = groupedMentions[source.id] || [];
-                  const scrapeItems = groupedScrape[source.id] || [];
                   const visibleMentions = mentionItems.slice(0, limitPerSource);
-                  const visibleScrapeItems = scrapeItems.slice(0, limitPerSource);
-                  const totalBySource = scrapeItems.length > 0 ? scrapeItems.length : mentionItems.length;
-                  const renderItems =
-                    visibleScrapeItems.length > 0
-                      ? visibleScrapeItems.map((item, index) => (
-                          <li key={`${source.id}-scrape-${index}`} className="rounded-lg border border-border/70 bg-background p-3">
-                            {item.url ? (
-                              <a
-                                href={item.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-semibold text-[color:var(--brand-strong)] hover:underline"
-                              >
-                                {scrapeItemTitle(item)}
-                              </a>
-                            ) : (
-                              <p className="text-sm font-semibold text-[color:var(--brand-strong)]">{scrapeItemTitle(item)}</p>
-                            )}
-                            {item.snippet ? <p className="mt-1 text-sm text-muted-foreground">{item.snippet}</p> : null}
-                          </li>
-                        ))
-                      : visibleMentions.map((item, index) => (
-                          <li key={`${source.id}-mention-${index}`}>
-                            <MentionCard mention={item} />
-                          </li>
-                        ));
+                  const totalBySource = mentionItems.length;
 
                   return (
                     <section key={source.id} className="rounded-xl border border-border/80 p-4">
@@ -411,10 +424,16 @@ export default function SearchPage() {
                           {totalBySource}
                         </span>
                       </header>
-                      {visibleScrapeItems.length === 0 && visibleMentions.length === 0 ? (
+                      {visibleMentions.length === 0 ? (
                         <p className="text-sm text-muted-foreground">{t("search.noSourceResults")}</p>
                       ) : (
-                        <ul className="space-y-3">{renderItems}</ul>
+                        <ul className="space-y-3">
+                          {visibleMentions.map((item, index) => (
+                            <li key={`${source.id}-mention-${index}`}>
+                              <MentionCard mention={item} />
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </section>
                   );
@@ -439,6 +458,7 @@ export default function SearchPage() {
               </p>
               <p>
                 <span className="text-muted-foreground">Janela:</span> {periodDays} dias
+                <span className="text-muted-foreground"> ({searchDateRange.from} ate {searchDateRange.to})</span>
               </p>
               <p>
                 <span className="text-muted-foreground">Localidade:</span> {locality || "-"}
@@ -446,7 +466,7 @@ export default function SearchPage() {
             </div>
             <button
               type="submit"
-              disabled={loading || !query || selectedSources.length === 0}
+              disabled={loading || !query.trim() || selectedSources.length === 0}
               className="primary-btn mt-5 w-full justify-center"
             >
               <WandSparkles size={16} />

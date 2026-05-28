@@ -37,7 +37,6 @@ const SENTIMENT_COLORS: Record<string, string> = {
   neutro: "#6b7280",
   neutral: "#6b7280",
 };
-const ALL_COMPANIES_VALUE = "all";
 
 function toDateInput(date: Date): string {
   const year = date.getFullYear();
@@ -64,8 +63,17 @@ function formatUrgencyDate(rawDate: string): string {
 
 export default function MetricsPage() {
   const { t } = useAppSettings();
+  const [defaultRange] = useState(() => {
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(end.getDate() - 29);
+    return {
+      from: toDateInput(start),
+      to: toDateInput(end),
+    };
+  });
 
-  const [selectedCompanySlug, setSelectedCompanySlug] = useState(ALL_COMPANIES_VALUE);
+  const [selectedCompanySlug, setSelectedCompanySlug] = useState("");
   const { data: companiesData } = useQuery({
     queryKey: ["companies"],
     queryFn: sentimentApi.listCompanies,
@@ -73,36 +81,35 @@ export default function MetricsPage() {
   });
   const companies = companiesData ?? [];
   const [periodPreset, setPeriodPreset] = useState<"7" | "30" | "90" | "custom">("30");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(defaultRange.from);
+  const [toDate, setToDate] = useState(defaultRange.to);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState<MetricsResponse | null>(null);
+  const [hasRequested, setHasRequested] = useState(false);
+  const hasRequiredFilters = Boolean(selectedCompanySlug && fromDate && toDate);
 
 
   async function loadMetrics() {
+    if (!hasRequiredFilters) {
+      setData(null);
+      setError("");
+      setLoading(false);
+      setHasRequested(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
+    setHasRequested(true);
 
     try {
-      const params: {
-        company_slug?: string;
-        period_days?: number;
-        from?: string;
-        to?: string;
-      } = {};
-
-      if (selectedCompanySlug !== ALL_COMPANIES_VALUE) {
-        params.company_slug = selectedCompanySlug;
-      }
-
-      if (periodPreset === "custom") {
-        if (fromDate) params.from = fromDate;
-        if (toDate) params.to = toDate;
-      } else {
-        params.period_days = Number(periodPreset);
-      }
+      const params = {
+        company_slug: selectedCompanySlug,
+        from: fromDate,
+        to: toDate,
+      };
 
       const response = await sentimentApi.metrics(params);
       setData(response);
@@ -120,14 +127,16 @@ export default function MetricsPage() {
       const days = Number(periodPreset);
       const end = new Date();
       const start = new Date();
-      start.setDate(end.getDate() - days);
+      start.setDate(end.getDate() - (days - 1));
       setFromDate(toDateInput(start));
       setToDate(toDateInput(end));
     }
   }, [periodPreset]);
 
   useEffect(() => {
-    void loadMetrics();
+    setHasRequested(false);
+    setData(null);
+    setError("");
   }, [selectedCompanySlug, periodPreset, fromDate, toDate]);
 
   const sentimentData = useMemo(
@@ -165,15 +174,24 @@ export default function MetricsPage() {
 
   const companyName = useMemo(() => {
     if (data?.company_name) return data.company_name;
-    return companies.find((company) => company.slug === selectedCompanySlug)?.name || "Visao geral";
+    return companies.find((company) => company.slug === selectedCompanySlug)?.name || "Nao selecionada";
   }, [companies, data?.company_name, selectedCompanySlug]);
 
   return (
     <AppShell
       title={t("metrics.title")}
-      subtitle={`Metricas por empresa e periodo. Empresa atual: ${companyName}.`}
+      subtitle={
+        hasRequiredFilters
+          ? `Metricas por empresa e periodo. Empresa atual: ${companyName}.`
+          : "Selecione empresa e periodo para gerar metricas."
+      }
       actions={
-        <button type="button" className="secondary-btn" onClick={() => void loadMetrics()}>
+        <button
+          type="button"
+          className="secondary-btn"
+          onClick={() => void loadMetrics()}
+          disabled={!hasRequiredFilters || loading}
+        >
           <RefreshCw size={16} /> {t("common.refresh")}
         </button>
       }
@@ -182,12 +200,11 @@ export default function MetricsPage() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Empresa:</span>
-            <Select value={selectedCompanySlug} onValueChange={setSelectedCompanySlug}>
+            <Select value={selectedCompanySlug || undefined} onValueChange={setSelectedCompanySlug}>
               <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Filtrar por empresa" />
+                <SelectValue placeholder={companies.length > 0 ? "Selecione uma empresa" : "Nenhuma empresa cadastrada"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL_COMPANIES_VALUE}>Todas as empresas</SelectItem>
                 {companies.map((company) => (
                   <SelectItem key={company.slug} value={company.slug}>
                     {company.name}
@@ -241,9 +258,24 @@ export default function MetricsPage() {
 
           <div className="rounded-md border border-border/70 bg-background/70 px-3 py-2 text-sm text-muted-foreground">
             <p>Periodo atual</p>
-            <p className="font-medium text-foreground">{data?.period_label || "-"}</p>
+            <p className="font-medium text-foreground">{fromDate && toDate ? `${fromDate} a ${toDate}` : "-"}</p>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => void loadMetrics()}
+              disabled={!hasRequiredFilters || loading}
+            >
+              <RefreshCw size={16} /> {loading ? t("common.processing") : "Gerar metricas"}
+            </button>
           </div>
         </div>
+
+        <p className="mt-3 text-xs text-muted-foreground">
+          A geracao consulta metricas persistidas no backend primario para o filtro atual, reutilizando resultados quando existirem.
+        </p>
       </section>
 
       {error ? (
@@ -252,15 +284,42 @@ export default function MetricsPage() {
         </div>
       ) : null}
 
+      {!selectedCompanySlug ? (
+        <section className="app-panel mb-6 p-8 text-center">
+          <p className="text-base font-semibold">Selecione uma empresa para habilitar metricas</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Sem empresa selecionada nenhuma requisicao pesada e executada.
+          </p>
+        </section>
+      ) : null}
+
+      {selectedCompanySlug && !hasRequested && !loading ? (
+        <section className="app-panel mb-6 p-8 text-center">
+          <p className="text-base font-semibold">Aguardando geracao de metricas</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Clique em "Gerar metricas" para consultar o periodo selecionado.
+          </p>
+        </section>
+      ) : null}
+
+      {selectedCompanySlug && loading ? (
+        <section className="app-panel mb-6 p-8 text-center">
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-[color:var(--brand)]" />
+          <p className="mt-3 text-sm text-muted-foreground">Carregando metricas...</p>
+        </section>
+      ) : null}
+
+      {hasRequested && !loading ? (
+      <>
       <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div className="stat-card p-5">
           <p className="text-sm uppercase text-muted-foreground">Volume de mencoes</p>
-          <p className="mt-2 text-2xl font-semibold">{loading ? "-" : data?.total_mentions ?? 0}</p>
+          <p className="mt-2 text-2xl font-semibold">{data?.total_mentions ?? 0}</p>
         </div>
 
         <div className="stat-card p-5">
           <p className="text-sm uppercase text-muted-foreground">Urgencia media</p>
-          <p className="mt-2 text-2xl font-semibold">{loading ? "-" : `${averageUrgencyPercent.toFixed(1)}%`}</p>
+          <p className="mt-2 text-2xl font-semibold">{`${averageUrgencyPercent.toFixed(1)}%`}</p>
         </div>
 
         <div className="stat-card p-5">
@@ -377,6 +436,8 @@ export default function MetricsPage() {
           </div>
         )}
       </section>
+      </>
+      ) : null}
     </AppShell>
   );
 }
