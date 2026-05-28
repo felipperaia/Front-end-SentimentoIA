@@ -99,14 +99,14 @@ function searchStatusClass(status: SearchResponse["status"] | undefined): string
 
 function getSearchProgressMessage(elapsedSeconds: number): string {
   if (elapsedSeconds < 15) {
-    return "Coletando menções nas fontes selecionadas...";
+    return "Importando menções do banco secundário...";
   }
 
   if (elapsedSeconds < 45) {
-    return "Analisando sentimentos (pode levar até 2 min)...";
+    return "Processando e vinculando menções ao usuário...";
   }
 
-  return "Finalizando e agregando resultados...";
+  return "Finalizando importação e agregando resultados...";
 }
 
 function formatDateForApi(value: Date): string {

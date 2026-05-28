@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { sentimentApi, getToken } from "@/lib/api";
 import { MessageSquare, Star, X } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 const SEARCH_COMPLETED_EVENT = "sentimentoia:search-completed";
 const NPS_HANDLED_KEY = "sentimentoia_nps_handled";
@@ -37,6 +38,7 @@ function markNpsAsHandled() {
 }
 
 export default function NpsModal() {
+  const [location] = useLocation();
   const [visible, setVisible] = useState(false);
   const [score, setScore] = useState<number | null>(null);
   const [comment, setComment] = useState("");
@@ -59,7 +61,8 @@ export default function NpsModal() {
 
     try {
       const { should_show, trigger } = await sentimentApi.npsCheck(nextSessionId);
-      if (!should_show || (trigger && trigger !== "post_search")) {
+      const acceptedTrigger = !trigger || trigger === "post_search" || trigger === "platform_experience";
+      if (!should_show || !acceptedTrigger) {
         if (delayedOpenRef.current !== null) {
           globalThis.clearTimeout(delayedOpenRef.current);
           delayedOpenRef.current = null;
@@ -97,6 +100,14 @@ export default function NpsModal() {
     };
   }, [checkAndOpenNps]);
 
+  useEffect(() => {
+    if (!getToken()) return;
+    const timeoutId = globalThis.setTimeout(() => {
+      checkAndOpenNps().catch(() => undefined);
+    }, 1500);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [checkAndOpenNps, location]);
+
   async function handleSubmit() {
     if (score === null || sending || !sessionId) return;
 
@@ -106,7 +117,7 @@ export default function NpsModal() {
         session_id: sessionId,
         score,
         comment: comment.trim() || undefined,
-        module_key: "search",
+        module_key: "platform",
         route: currentRoutePath(),
       });
       markNpsAsHandled();
@@ -124,7 +135,7 @@ export default function NpsModal() {
       try {
         await sentimentApi.npsDismiss({
           session_id: sessionId,
-          module_key: "search",
+          module_key: "platform",
           route: currentRoutePath(),
         });
       } catch (err) {
