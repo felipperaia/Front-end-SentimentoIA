@@ -6,7 +6,7 @@ const configuredApiBaseUrl = String(import.meta.env.VITE_API_URL || "")
 const configuredApiTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS || 90000);
 const configuredRetryAttempts = Number(import.meta.env.VITE_API_RETRY_ATTEMPTS || 2);
 const configuredRetryDelayMs = Number(import.meta.env.VITE_API_RETRY_DELAY_MS || 1000);
-const configuredApiIngestPath = String(import.meta.env.VITE_API_INGEST_PATH || "/api/ingestion").trim();
+const configuredApiIngestPath = String(import.meta.env.VITE_API_INGEST_PATH || "/api/ingestion/comments").trim();
 
 export const API_BASE_URL = configuredApiBaseUrl;
 export const AUTH_TOKEN_KEY = "sentimentoia_access_token";
@@ -40,11 +40,11 @@ const API_RETRY_ATTEMPTS = Number.isFinite(configuredRetryAttempts)
 const API_RETRY_DELAY_MS = Number.isFinite(configuredRetryDelayMs)
   ? Math.max(100, configuredRetryDelayMs)
   : 1000;
-let resolvedApiIngestPath = configuredApiIngestPath || "/api/ingestion";
+let resolvedApiIngestPath = configuredApiIngestPath || "/api/ingestion/comments";
 if (!resolvedApiIngestPath.startsWith("/")) {
   resolvedApiIngestPath = `/${resolvedApiIngestPath}`;
 }
-const API_INGEST_PATH = resolvedApiIngestPath.replace(/\/+$/, "") || "/api/ingestion";
+const API_INGEST_PATH = resolvedApiIngestPath.replace(/\/+$/, "") || "/api/ingestion/comments";
 const LONG_PATHS = ["/api/search", API_INGEST_PATH] as const;
 const LONG_REQUEST_TIMEOUT_MS = 120_000;
 const SEARCH_TIMEOUT_MESSAGE =
