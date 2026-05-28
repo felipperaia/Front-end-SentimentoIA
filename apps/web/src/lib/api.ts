@@ -1615,51 +1615,37 @@ export type IngestResponse = {
   message?: string;
 };
 
-function toLegacyIngestionPayload(payload: Record<string, unknown> | Record<string, unknown>[]): Record<string, unknown> {
-  const items = Array.isArray(payload)
-    ? payload
-    : ensureArray<Record<string, unknown>>(ensureObject(payload).comments);
-  const nowIso = new Date().toISOString();
-  const sourceTop = asString(ensureObject(items[0]).source, "web");
+type IntegrationStatusResponse = {
+  ingestion_json_enabled?: boolean;
+  mongodb_secondary_configured?: boolean;
+  ingestion_staging_collection?: string;
+  [key: string]: unknown;
+};
 
-  const comments = items.map((item, index) => {
-    const raw = ensureObject(item);
-    const metadataSource = asString(raw.source, sourceTop);
-    const metadataUrl = asNullableString(raw.url || raw.canonical_url);
-    return {
-      external_id: asString(raw.external_id || raw.source_item_id || `ingest-${Date.now()}-${index + 1}`, `ingest-${index + 1}`),
-      author_name: asString(raw.author || raw.author_name || "Autor desconhecido", "Autor desconhecido"),
-      author_email: asString(raw.author_email, ""),
-      author_phone: asString(raw.author_phone, ""),
-      text: asString(raw.text, ""),
-      rating: raw.rating === undefined || raw.rating === null ? null : asNumber(raw.rating, 0),
-      created_at: asString(raw.published_at || raw.created_at || nowIso, nowIso),
-      tags: ensureArray<string>(raw.tags),
-      metadata: {
-        ...raw,
-        source: metadataSource,
-        url: metadataUrl,
-      },
-    };
-  });
+let ingestionCompatibilityChecked = false;
 
-  const mentions = comments.map((comment) => ({
-    source: asString(ensureObject(comment.metadata).source, sourceTop),
-    text: asString(comment.text, ""),
-    published_at: asString(comment.created_at, nowIso),
-    external_id: asString(comment.external_id, ""),
-    author: asString(comment.author_name, ""),
-  }));
+async function assertSecondaryIngestionBackendCompatible(): Promise<void> {
+  if (ingestionCompatibilityChecked) return;
 
-  return {
-    batch_name: `batch_${new Date().toISOString().slice(0, 19).replaceAll(":", "").replaceAll("-", "")}`,
-    source: sourceTop || "web",
-    channel: "manual",
-    brand: "ingestao-frontend",
-    locale: "pt-BR",
-    comments,
-    mentions,
-  };
+  const raw = await apiFetch<any>("/api/status/integrations");
+  const status = ensureObject(raw) as IntegrationStatusResponse;
+  const hasSecondaryPipeline =
+    status.ingestion_json_enabled === true &&
+    typeof status.ingestion_staging_collection === "string";
+
+  if (!hasSecondaryPipeline) {
+    throw new Error(
+      "Backend incompatível com ingestão em banco secundário. Atualize o deploy para a versão com /api/ingestion -> Mongo secundário."
+    );
+  }
+
+  if (status.mongodb_secondary_configured !== true) {
+    throw new Error(
+      "MongoDB secundário não configurado no backend. Defina SECONDARY_MONGODB_URI e SECONDARY_DATABASE_NAME no deploy."
+    );
+  }
+
+  ingestionCompatibilityChecked = true;
 }
 
 function normalizeExecutionStatus(value: unknown, fallback: ExecutionStatus = "success"): ExecutionStatus {
@@ -2178,27 +2164,12 @@ export const sentimentApi = {
     };
   },
   async ingest(payload: Record<string, unknown> | Record<string, unknown>[]): Promise<IngestResponse> {
-    let raw: any;
-    try {
-      raw = await apiFetch<any>(API_INGEST_PATH, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-    } catch (error) {
-      if (
-        error instanceof ApiRequestError &&
-        error.status === 422 &&
-        Array.isArray(payload)
-      ) {
-        const legacyPayload = toLegacyIngestionPayload(payload);
-        raw = await apiFetch<any>(API_INGEST_PATH, {
-          method: "POST",
-          body: JSON.stringify(legacyPayload),
-        });
-      } else {
-        throw error;
-      }
-    }
+    await assertSecondaryIngestionBackendCompatible();
+
+    const raw = await apiFetch<any>(API_INGEST_PATH, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
 
     const data = ensureObject(raw);
     const rejectedItems = ensureArray<any>(data.rejected_items).map((entry) => {
