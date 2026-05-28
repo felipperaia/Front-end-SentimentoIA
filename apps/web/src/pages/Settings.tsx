@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { authApi, sentimentApi, type AppTheme } from "@/lib/api";
+import { ApiRequestError, authApi, sentimentApi, type AppTheme } from "@/lib/api";
 import { AlertCircle, Database, Save, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -215,6 +215,38 @@ function prepareIngestPayload(parsed: unknown): {
     itemCount: items.length,
     validationErrors,
   };
+}
+
+function resolveApiRequestErrorDetails(error: ApiRequestError): string {
+  const status = typeof error.status === "number" ? `HTTP ${error.status}` : "HTTP ?";
+  const path = error.path || "unknown";
+  const data = error.data;
+  if (data && typeof data === "object") {
+    const detail = (data as Record<string, unknown>).detail;
+    if (detail && typeof detail === "object") {
+      const message = (detail as Record<string, unknown>).message;
+      if (typeof message === "string" && message.trim()) {
+        return `${status} ${path}: ${message.trim()}`;
+      }
+      const items = (detail as Record<string, unknown>).items;
+      if (Array.isArray(items) && items.length > 0) {
+        const first = items[0];
+        if (first && typeof first === "object") {
+          const errors = (first as Record<string, unknown>).errors;
+          if (Array.isArray(errors) && errors.length > 0) {
+            const firstErr = errors[0];
+            if (firstErr && typeof firstErr === "object") {
+              const msg = (firstErr as Record<string, unknown>).msg;
+              if (typeof msg === "string" && msg.trim()) {
+                return `${status} ${path}: ${msg.trim()}`;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return `${status} ${path}: ${error.message}`;
 }
 
 function normalizeUsername(value: string) {
@@ -570,7 +602,17 @@ export default function SettingsPage() {
         );
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao enviar JSON para ingestao.");
+      if (err instanceof ApiRequestError) {
+        console.error("Erro de ingestao", {
+          path: err.path,
+          status: err.status,
+          code: err.code,
+          data: err.data,
+        });
+        toast.error(resolveApiRequestErrorDetails(err));
+      } else {
+        toast.error(err instanceof Error ? err.message : "Falha ao enviar JSON para ingestao.");
+      }
     } finally {
       setIngestBusy(false);
     }

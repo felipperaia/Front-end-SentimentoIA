@@ -1629,19 +1629,22 @@ async function assertSecondaryIngestionBackendCompatible(): Promise<void> {
 
   const raw = await apiFetch<any>("/api/status/integrations");
   const status = ensureObject(raw) as IntegrationStatusResponse;
+  const debugKeys = Object.keys(status).sort().join(",");
   const hasSecondaryPipeline =
     status.ingestion_json_enabled === true &&
     typeof status.ingestion_staging_collection === "string";
 
   if (!hasSecondaryPipeline) {
     throw new Error(
-      "Backend incompatível com ingestão em banco secundário. Atualize o deploy para a versão com /api/ingestion -> Mongo secundário."
+      `Backend incompatível com ingestão em banco secundário (API=${API_BASE_URL || "N/A"}). ` +
+      `Resposta de /api/status/integrations não contém o contrato esperado. Chaves recebidas: [${debugKeys}]`
     );
   }
 
   if (status.mongodb_secondary_configured !== true) {
     throw new Error(
-      "MongoDB secundário não configurado no backend. Defina SECONDARY_MONGODB_URI e SECONDARY_DATABASE_NAME no deploy."
+      `MongoDB secundário não configurado no backend (API=${API_BASE_URL || "N/A"}). ` +
+      "Defina SECONDARY_MONGODB_URI e SECONDARY_DATABASE_NAME no deploy."
     );
   }
 
