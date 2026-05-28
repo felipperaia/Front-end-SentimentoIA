@@ -1615,6 +1615,53 @@ export type IngestResponse = {
   message?: string;
 };
 
+function toLegacyIngestionPayload(payload: Record<string, unknown> | Record<string, unknown>[]): Record<string, unknown> {
+  const items = Array.isArray(payload)
+    ? payload
+    : ensureArray<Record<string, unknown>>(ensureObject(payload).comments);
+  const nowIso = new Date().toISOString();
+  const sourceTop = asString(ensureObject(items[0]).source, "web");
+
+  const comments = items.map((item, index) => {
+    const raw = ensureObject(item);
+    const metadataSource = asString(raw.source, sourceTop);
+    const metadataUrl = asNullableString(raw.url || raw.canonical_url);
+    return {
+      external_id: asString(raw.external_id || raw.source_item_id || `ingest-${Date.now()}-${index + 1}`, `ingest-${index + 1}`),
+      author_name: asString(raw.author || raw.author_name || "Autor desconhecido", "Autor desconhecido"),
+      author_email: asString(raw.author_email, ""),
+      author_phone: asString(raw.author_phone, ""),
+      text: asString(raw.text, ""),
+      rating: raw.rating === undefined || raw.rating === null ? null : asNumber(raw.rating, 0),
+      created_at: asString(raw.published_at || raw.created_at || nowIso, nowIso),
+      tags: ensureArray<string>(raw.tags),
+      metadata: {
+        ...raw,
+        source: metadataSource,
+        url: metadataUrl,
+      },
+    };
+  });
+
+  const mentions = comments.map((comment) => ({
+    source: asString(ensureObject(comment.metadata).source, sourceTop),
+    text: asString(comment.text, ""),
+    published_at: asString(comment.created_at, nowIso),
+    external_id: asString(comment.external_id, ""),
+    author: asString(comment.author_name, ""),
+  }));
+
+  return {
+    batch_name: `batch_${new Date().toISOString().slice(0, 19).replaceAll(":", "").replaceAll("-", "")}`,
+    source: sourceTop || "web",
+    channel: "manual",
+    brand: "ingestao-frontend",
+    locale: "pt-BR",
+    comments,
+    mentions,
+  };
+}
+
 function normalizeExecutionStatus(value: unknown, fallback: ExecutionStatus = "success"): ExecutionStatus {
   const normalized = asString(value, "").toLowerCase();
   if (normalized === "success" || normalized === "partial_success" || normalized === "empty" || normalized === "failed") {
@@ -2131,13 +2178,40 @@ export const sentimentApi = {
     };
   },
   async ingest(payload: Record<string, unknown> | Record<string, unknown>[]): Promise<IngestResponse> {
-    const raw = await apiFetch<any>(API_INGEST_PATH, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    let raw: any;
+    try {
+      raw = await apiFetch<any>(API_INGEST_PATH, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      if (
+        error instanceof ApiRequestError &&
+        error.status === 422 &&
+        Array.isArray(payload)
+      ) {
+        const legacyPayload = toLegacyIngestionPayload(payload);
+        raw = await apiFetch<any>(API_INGEST_PATH, {
+          method: "POST",
+          body: JSON.stringify(legacyPayload),
+        });
+      } else {
+        throw error;
+      }
+    }
 
     const data = ensureObject(raw);
+    const rejectedItems = ensureArray<any>(data.rejected_items).map((entry) => {
+      const item = ensureObject(entry);
+      return {
+        index: -1,
+        field: asNullableString(item.external_id) ?? undefined,
+        message: asString(item.reason, "Erro de validacao"),
+        code: asNullableString(item.code) ?? undefined,
+      } as IngestItemError;
+    });
     const errors = normalizeIngestErrors(data.errors || data.validation_errors || data.invalid_items);
+    const mergedErrors = errors.length > 0 ? errors : rejectedItems;
     const payloadItemsCount = Array.isArray(payload)
       ? payload.length
       : ensureArray<any>(ensureObject(payload).mentions).length;
@@ -2151,9 +2225,9 @@ export const sentimentApi = {
     const duplicates = Math.max(0, Math.round(asNumber(data.duplicates ?? data.duplicate_count, 0)));
     const rejectedCount = Math.max(
       0,
-      Math.round(asNumber(data.rejected_count ?? data.invalid_count ?? errors.length, errors.length))
+      Math.round(asNumber(data.rejected_count ?? data.rejected ?? data.invalid_count ?? mergedErrors.length, mergedErrors.length))
     );
-    const rejectedMessages = errors
+    const rejectedMessages = mergedErrors
       .map((item) => item.message)
       .filter((item) => item.length > 0)
       .slice(0, 5);
@@ -2166,7 +2240,7 @@ export const sentimentApi = {
       status: asNullableString(data.status) ?? undefined,
       rejected_count: rejectedCount,
       rejected_messages: rejectedMessages.length > 0 ? rejectedMessages : undefined,
-      errors,
+      errors: mergedErrors,
       message: asNullableString(data.message) ?? undefined,
     };
   },
