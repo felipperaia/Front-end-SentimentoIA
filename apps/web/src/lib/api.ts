@@ -1605,9 +1605,12 @@ export type IngestItemError = {
 
 export type IngestResponse = {
   received: number;
-  accepted: number;
-  inserted?: number;
-  updated?: number;
+  inserted: number;
+  duplicates: number;
+  batch_id?: string;
+  status?: string;
+  rejected_count?: number;
+  rejected_messages?: string[];
   errors: IngestItemError[];
   message?: string;
 };
@@ -1716,9 +1719,15 @@ export const sentimentApi = {
     sentiment_filter?: string;
     min_criticality?: string;
   }) {
+    const requestPayload = {
+      ...payload,
+      period_from: payload.from,
+      period_to: payload.to,
+    };
+
     const raw = await apiFetch<any>("/api/search", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
     });
 
     const data = ensureObject(raw);
@@ -1735,7 +1744,7 @@ export const sentimentApi = {
       status,
       partial_success: partialSuccess,
       status_summary: statusSummary,
-      total: asNumber(data.total, mentions.length),
+      total: asNumber(data.total ?? data.total_importado, mentions.length),
       mentions,
       metrics: normalizeDashboardMetrics(data.metrics, mentions),
       llm_analysis: ensureObject(data.llm_analysis),
@@ -2138,16 +2147,25 @@ export const sentimentApi = {
         asNumber(data.received ?? data.total_received ?? data.total ?? data.count, payloadItemsCount)
       )
     );
-    const acceptedFallback = Math.max(received - errors.length, 0);
+    const inserted = Math.max(0, Math.round(asNumber(data.inserted ?? data.accepted ?? data.success_count, 0)));
+    const duplicates = Math.max(0, Math.round(asNumber(data.duplicates ?? data.duplicate_count, 0)));
+    const rejectedCount = Math.max(
+      0,
+      Math.round(asNumber(data.rejected_count ?? data.invalid_count ?? errors.length, errors.length))
+    );
+    const rejectedMessages = errors
+      .map((item) => item.message)
+      .filter((item) => item.length > 0)
+      .slice(0, 5);
 
     return {
       received,
-      accepted: Math.max(
-        0,
-        Math.round(asNumber(data.accepted ?? data.success_count ?? data.inserted, acceptedFallback))
-      ),
-      inserted: data.inserted === undefined ? undefined : Math.max(0, Math.round(asNumber(data.inserted, 0))),
-      updated: data.updated === undefined ? undefined : Math.max(0, Math.round(asNumber(data.updated, 0))),
+      inserted,
+      duplicates,
+      batch_id: asNullableString(data.batch_id) ?? undefined,
+      status: asNullableString(data.status) ?? undefined,
+      rejected_count: rejectedCount,
+      rejected_messages: rejectedMessages.length > 0 ? rejectedMessages : undefined,
       errors,
       message: asNullableString(data.message) ?? undefined,
     };

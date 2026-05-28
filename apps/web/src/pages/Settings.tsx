@@ -25,30 +25,6 @@ type ProfileDraft = {
 
 const DELETE_CONFIRM_TEXT = "ENCERRAR CONTA";
 
-const INGEST_EXAMPLE = {
-  company_name: "Acme Corp",
-  company_slug: "acme-corp",
-  period_label: "Ultimos 30 dias",
-  mentions: [
-    {
-      source: "google",
-      sentiment: "negativo",
-      urgency: "high",
-      text: "O atendimento demorou muito para responder.",
-      aspect: "atendimento",
-      date: "2025-02-10",
-    },
-    {
-      source: "reclameaqui",
-      sentiment: "positivo",
-      urgency: "low",
-      text: "Equipe resolveu meu problema no mesmo dia.",
-      aspect: "resolucao",
-      date: "2025-02-14",
-    },
-  ],
-};
-
 type IngestValidationError = {
   index: number;
   field?: string;
@@ -58,9 +34,13 @@ type IngestValidationError = {
 type IngestSummary = {
   parsedCount: number;
   sentCount: number;
-  acceptedCount: number;
-  insertedCount?: number;
-  updatedCount?: number;
+  insertedCount: number;
+  duplicateCount: number;
+  batchId?: string;
+  status?: string;
+  fileName?: string;
+  backendRejectedCount?: number;
+  backendRejectedPreview?: string[];
   errors: IngestValidationError[];
 };
 
@@ -68,32 +48,143 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function resolveMentionTextCandidate(item: Record<string, unknown>): string {
-  if (typeof item.text === "string") return item.text;
-  if (typeof item.title === "string") return item.title;
-  if (typeof item.content === "string") return item.content;
-  if (typeof item.body === "string") return item.body;
+function readString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function pickFirstString(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = readString(record, key);
+    if (value) return value;
+  }
   return "";
 }
 
-function normalizeIngestValidationErrors(items: unknown[]): IngestValidationError[] {
-  const errors: IngestValidationError[] = [];
+function resolveItemArray(parsed: unknown): { items: unknown[]; shared: Record<string, unknown> } {
+  if (Array.isArray(parsed)) {
+    return {
+      items: parsed,
+      shared: {},
+    };
+  }
 
-  items.forEach((item, index) => {
-    if (!isPlainObject(item)) {
-      errors.push({
+  if (!isPlainObject(parsed)) {
+    return {
+      items: [],
+      shared: {},
+    };
+  }
+
+  const mentions = parsed.mentions;
+  if (Array.isArray(mentions)) {
+    const { mentions: _, ...shared } = parsed;
+    return {
+      items: mentions,
+      shared,
+    };
+  }
+
+  const comments = parsed.comments;
+  if (Array.isArray(comments)) {
+    const { comments: _, ...shared } = parsed;
+    return {
+      items: comments,
+      shared,
+    };
+  }
+
+  return {
+    items: [parsed],
+    shared: {},
+  };
+}
+
+function buildNormalizedIngestionItem(
+  item: Record<string, unknown>,
+  shared: Record<string, unknown>
+): Record<string, unknown> {
+  const source = pickFirstString(item, ["source"]) || pickFirstString(shared, ["source"]);
+  const text = pickFirstString(item, ["text", "title", "content", "body"]);
+  const company_name = pickFirstString(item, ["company_name"]) || pickFirstString(shared, ["company_name"]);
+  const company_slug = pickFirstString(item, ["company_slug"]) || pickFirstString(shared, ["company_slug"]);
+  const query = pickFirstString(item, ["query"]) || pickFirstString(shared, ["query"]);
+  const entity = pickFirstString(item, ["entity"]) || pickFirstString(shared, ["entity"]);
+  const author = pickFirstString(item, ["author"]) || pickFirstString(shared, ["author"]);
+  const published_at = pickFirstString(item, ["published_at", "date", "created_at"]) || pickFirstString(shared, ["published_at"]);
+  const url = pickFirstString(item, ["url"]) || pickFirstString(shared, ["url"]);
+  const canonical_url =
+    pickFirstString(item, ["canonical_url"]) || pickFirstString(shared, ["canonical_url"]);
+  const external_id = pickFirstString(item, ["external_id"]) || pickFirstString(shared, ["external_id"]);
+  const source_item_id =
+    pickFirstString(item, ["source_item_id"]) || pickFirstString(shared, ["source_item_id"]);
+  const ratingValue = item.rating ?? shared.rating;
+  const rating =
+    typeof ratingValue === "number" && Number.isFinite(ratingValue) ? ratingValue : undefined;
+
+  const normalized: Record<string, unknown> = {
+    source,
+    text,
+    author: author || undefined,
+    published_at: published_at || undefined,
+    url: url || undefined,
+    canonical_url: canonical_url || undefined,
+    query: query || undefined,
+    entity: entity || undefined,
+    company_name: company_name || undefined,
+    company_slug: company_slug || undefined,
+    external_id: external_id || undefined,
+    source_item_id: source_item_id || undefined,
+    rating,
+    raw: isPlainObject(item) ? item : { input: item },
+  };
+
+  return normalized;
+}
+
+function prepareIngestPayload(parsed: unknown): {
+  payload: Record<string, unknown>[];
+  itemCount: number;
+  validationErrors: IngestValidationError[];
+} {
+  const { items, shared } = resolveItemArray(parsed);
+  const validationErrors: IngestValidationError[] = [];
+  const normalizedItems: Record<string, unknown>[] = [];
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return {
+      payload: [],
+      itemCount: 0,
+      validationErrors: [
+        {
+          index: -1,
+          message: "JSON deve ser um array de itens, ou objeto com campo mentions/comments.",
+        },
+      ],
+    };
+  }
+
+  items.forEach((rawItem, index) => {
+    if (!isPlainObject(rawItem)) {
+      validationErrors.push({
         index,
         message: "Cada item deve ser um objeto JSON.",
       });
       return;
     }
 
-    const source = typeof item.source === "string" ? item.source.trim() : "";
-    const textCandidate = resolveMentionTextCandidate(item);
-    const text = textCandidate.trim();
+    const normalized = buildNormalizedIngestionItem(rawItem, shared);
+    const source = typeof normalized.source === "string" ? normalized.source.trim() : "";
+    const text = typeof normalized.text === "string" ? normalized.text.trim() : "";
+    const hasCompanyReference = [
+      normalized.company_slug,
+      normalized.company_name,
+      normalized.query,
+      normalized.entity,
+    ].some((value) => typeof value === "string" && value.trim().length > 0);
 
     if (!source) {
-      errors.push({
+      validationErrors.push({
         index,
         field: "source",
         message: "Campo source obrigatorio.",
@@ -101,51 +192,28 @@ function normalizeIngestValidationErrors(items: unknown[]): IngestValidationErro
     }
 
     if (!text) {
-      errors.push({
+      validationErrors.push({
         index,
         field: "text",
         message: "Campo text (ou title/content/body) obrigatorio.",
       });
     }
+
+    if (!hasCompanyReference) {
+      validationErrors.push({
+        index,
+        field: "company",
+        message: "Informe company_slug, company_name, query ou entity.",
+      });
+    }
+
+    normalizedItems.push(normalized);
   });
 
-  return errors;
-}
-
-function prepareIngestPayload(parsed: unknown): {
-  payload: Record<string, unknown> | Record<string, unknown>[];
-  itemCount: number;
-  validationErrors: IngestValidationError[];
-} {
-  if (Array.isArray(parsed)) {
-    return {
-      payload: parsed as Record<string, unknown>[],
-      itemCount: parsed.length,
-      validationErrors: normalizeIngestValidationErrors(parsed),
-    };
-  }
-
-  if (!isPlainObject(parsed)) {
-    return {
-      payload: [],
-      itemCount: 0,
-      validationErrors: [{ index: -1, message: "JSON deve ser um array de itens ou objeto com mentions." }],
-    };
-  }
-
-  const mentions = Array.isArray(parsed.mentions) ? parsed.mentions : null;
-  if (!mentions) {
-    return {
-      payload: parsed,
-      itemCount: 0,
-      validationErrors: [{ index: -1, message: "Objeto JSON deve conter o campo mentions (array)." }],
-    };
-  }
-
   return {
-    payload: parsed,
-    itemCount: mentions.length,
-    validationErrors: normalizeIngestValidationErrors(mentions),
+    payload: normalizedItems,
+    itemCount: items.length,
+    validationErrors,
   };
 }
 
@@ -194,9 +262,10 @@ export default function SettingsPage() {
   const [mfaError, setMfaError] = useState("");
   const [mfaSetup, setMfaSetup] = useState<{ secret: string; qr_code: string } | null>(null);
 
-  const [ingestJson, setIngestJson] = useState(JSON.stringify(INGEST_EXAMPLE, null, 2));
   const [ingestBusy, setIngestBusy] = useState(false);
   const [ingestFileName, setIngestFileName] = useState("");
+  const [ingestPayload, setIngestPayload] = useState<Record<string, unknown>[]>([]);
+  const [ingestParsedCount, setIngestParsedCount] = useState(0);
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
 
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
@@ -412,50 +481,68 @@ export default function SettingsPage() {
 
     try {
       const content = await file.text();
-      setIngestJson(content);
+      const parsed = JSON.parse(content);
+      const prepared = prepareIngestPayload(parsed);
+
       setIngestFileName(file.name);
+      setIngestPayload(prepared.payload);
+      setIngestParsedCount(prepared.itemCount);
+
+      if (prepared.itemCount <= 0 || prepared.validationErrors.length > 0) {
+        const errors =
+          prepared.validationErrors.length > 0
+            ? prepared.validationErrors
+            : [{ index: -1, message: "Nenhum item valido encontrado no arquivo." }];
+        setIngestSummary({
+          parsedCount: prepared.itemCount,
+          sentCount: 0,
+          insertedCount: 0,
+          duplicateCount: 0,
+          fileName: file.name,
+          errors,
+        });
+        toast.error(errors[0]?.message || "Arquivo JSON invalido para ingestao.");
+        return;
+      }
+
       setIngestSummary(null);
-      toast.success("Arquivo JSON carregado.");
+      toast.success(`Arquivo JSON carregado com ${prepared.itemCount} item(ns).`);
     } catch (err) {
+      setIngestPayload([]);
+      setIngestParsedCount(0);
+      setIngestSummary({
+        parsedCount: 0,
+        sentCount: 0,
+        insertedCount: 0,
+        duplicateCount: 0,
+        fileName: file.name,
+        errors: [{ index: -1, message: "JSON invalido. Corrija o arquivo e tente novamente." }],
+      });
       toast.error(err instanceof Error ? err.message : "Falha ao ler o arquivo JSON.");
     }
   }
 
   async function handleIngestData() {
+    if (!ingestFileName) {
+      toast.error("Selecione um arquivo JSON antes de enviar.");
+      return;
+    }
+
+    if (ingestPayload.length <= 0 || ingestParsedCount <= 0) {
+      toast.error("Arquivo sem itens validos para ingestao.");
+      return;
+    }
+
+    if (ingestSummary && ingestSummary.errors.length > 0 && ingestSummary.sentCount === 0) {
+      toast.error("Corrija os erros do arquivo antes de enviar.");
+      return;
+    }
+
     setIngestBusy(true);
     setIngestSummary(null);
 
     try {
-      const parsed = JSON.parse(ingestJson);
-      const prepared = prepareIngestPayload(parsed);
-
-      if (prepared.itemCount <= 0) {
-        const errors =
-          prepared.validationErrors.length > 0
-            ? prepared.validationErrors
-            : [{ index: -1, message: "Nenhum item encontrado para envio." }];
-        setIngestSummary({
-          parsedCount: prepared.itemCount,
-          sentCount: 0,
-          acceptedCount: 0,
-          errors,
-        });
-        toast.error(errors[0]?.message || "Nenhum item encontrado para envio.");
-        return;
-      }
-
-      if (prepared.validationErrors.length > 0) {
-        setIngestSummary({
-          parsedCount: prepared.itemCount,
-          sentCount: 0,
-          acceptedCount: 0,
-          errors: prepared.validationErrors,
-        });
-        toast.error("JSON com erros de validacao por indice. Corrija antes de enviar.");
-        return;
-      }
-
-      const response = await sentimentApi.ingest(prepared.payload);
+      const response = await sentimentApi.ingest(ingestPayload);
       const responseErrors: IngestValidationError[] = response.errors.map((item) => ({
         index: item.index,
         field: item.field,
@@ -463,32 +550,27 @@ export default function SettingsPage() {
       }));
 
       setIngestSummary({
-        parsedCount: prepared.itemCount,
-        sentCount: prepared.itemCount,
-        acceptedCount: response.accepted,
-        insertedCount: response.inserted,
-        updatedCount: response.updated,
+        parsedCount: ingestParsedCount,
+        sentCount: ingestPayload.length,
+        insertedCount: response.inserted ?? 0,
+        duplicateCount: response.duplicates ?? 0,
+        batchId: response.batch_id,
+        status: response.status,
+        fileName: ingestFileName,
+        backendRejectedCount: response.rejected_count,
+        backendRejectedPreview: response.rejected_messages,
         errors: responseErrors,
       });
 
       if (responseErrors.length > 0) {
-        toast.warning(response.message || `Ingestao concluida com ${responseErrors.length} erro(s).`);
+        toast.warning(`Ingestao concluida com ${responseErrors.length} erro(s) de item.`);
       } else {
-        toast.success(response.message || `Ingestao concluida: ${response.accepted} item(ns) aceito(s).`);
+        toast.success(
+          `Ingestao concluida: ${response.inserted ?? 0} inserido(s), ${response.duplicates ?? 0} duplicado(s).`
+        );
       }
     } catch (err) {
-      if (err instanceof SyntaxError) {
-        const errors = [{ index: -1, message: "JSON invalido. Revise o conteudo antes de enviar." }];
-        setIngestSummary({
-          parsedCount: 0,
-          sentCount: 0,
-          acceptedCount: 0,
-          errors,
-        });
-        toast.error(errors[0].message);
-      } else {
-        toast.error(err instanceof Error ? err.message : "Falha ao enviar JSON para ingestao.");
-      }
+      toast.error(err instanceof Error ? err.message : "Falha ao enviar JSON para ingestao.");
     } finally {
       setIngestBusy(false);
     }
@@ -814,7 +896,7 @@ export default function SettingsPage() {
           <h2 className="panel-title">Ingestao de dados JSON</h2>
         </header>
         <p className="mt-2 text-sm text-muted-foreground">
-          Envie um arquivo .json ou cole o payload para ingestao real de dados no backend.
+          Selecione um arquivo .json para enviar os dados ao banco secundario (staging).
         </p>
 
         <div className="mt-4 space-y-4">
@@ -829,43 +911,20 @@ export default function SettingsPage() {
               disabled={ingestBusy}
             />
             {ingestFileName ? (
-              <p className="mt-2 text-xs text-muted-foreground">Arquivo carregado: {ingestFileName}</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Arquivo carregado: {ingestFileName} ({ingestParsedCount} item(ns))
+              </p>
             ) : null}
-          </div>
-
-          <div>
-            <label className="field-label" htmlFor="ingest-json">Cole o JSON</label>
-            <textarea
-              id="ingest-json"
-              className="field-input mt-2 min-h-[220px] font-mono text-xs"
-              value={ingestJson}
-              onChange={(event) => {
-                setIngestJson(event.target.value);
-                setIngestSummary(null);
-              }}
-              spellCheck={false}
-            />
           </div>
 
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="secondary-btn"
-              onClick={() => {
-                setIngestJson(JSON.stringify(INGEST_EXAMPLE, null, 2));
-                setIngestSummary(null);
-                setIngestFileName("");
-              }}
-            >
-              Preencher exemplo de JSON
-            </button>
-            <button
-              type="button"
               className="primary-btn"
-              disabled={ingestBusy}
+              disabled={ingestBusy || ingestPayload.length <= 0 || !ingestFileName}
               onClick={() => void handleIngestData()}
             >
-              {ingestBusy ? t("common.processing") : "Enviar JSON para ingestao"}
+              {ingestBusy ? t("common.processing") : "Enviar arquivo para ingestao"}
             </button>
           </div>
 
@@ -873,13 +932,25 @@ export default function SettingsPage() {
             <div className="rounded-xl border border-border/70 bg-background p-4">
               <p className="text-sm font-semibold">Resumo da ingestao</p>
               <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
+                <p>Arquivo: {ingestSummary.fileName || "-"}</p>
                 <p>Itens parseados: {ingestSummary.parsedCount}</p>
                 <p>Itens enviados: {ingestSummary.sentCount}</p>
-                <p>Itens aceitos: {ingestSummary.acceptedCount}</p>
-                <p>
-                  Inseridos/atualizados: {ingestSummary.insertedCount ?? 0}/{ingestSummary.updatedCount ?? 0}
-                </p>
+                <p>Inseridos: {ingestSummary.insertedCount}</p>
+                <p>Duplicados ignorados: {ingestSummary.duplicateCount}</p>
+                <p>Batch ID: {ingestSummary.batchId || "-"}</p>
+                <p>Status: {ingestSummary.status || "-"}</p>
               </div>
+
+              {typeof ingestSummary.backendRejectedCount === "number" && ingestSummary.backendRejectedCount > 0 ? (
+                <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                  <p>Itens rejeitados pelo backend: {ingestSummary.backendRejectedCount}</p>
+                  {ingestSummary.backendRejectedPreview && ingestSummary.backendRejectedPreview.length > 0 ? (
+                    <p className="mt-1">
+                      Motivos (amostra): {ingestSummary.backendRejectedPreview.join(" | ")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {ingestSummary.errors.length > 0 ? (
                 <div className="mt-3 space-y-2">
@@ -962,4 +1033,3 @@ export default function SettingsPage() {
     </AppShell>
   );
 }
-
