@@ -2026,6 +2026,7 @@ export const sentimentApi = {
     from?: string;
     to?: string;
     limit?: number;
+    filename?: string;
   }): Promise<void> {
     // Contrato oficial: GET /api/reports/export/insights.pdf.
     const query = new URLSearchParams();
@@ -2039,7 +2040,8 @@ export const sentimentApi = {
 
     const suffix = query.toString() ? `?${query.toString()}` : "";
     const { blob, filename } = await apiFetchBlob(`/api/reports/export/insights.pdf${suffix}`);
-    triggerBlobDownload(blob, filename || `insights-${new Date().toISOString().slice(0, 10)}.pdf`);
+    const resolvedFilename = params?.filename || filename || `insights-${new Date().toISOString().slice(0, 10)}.pdf`;
+    triggerBlobDownload(blob, resolvedFilename);
   },
   async listChatThreads(limit = 20) {
     const raw = await apiFetch<any>(`/api/chat/threads?limit=${Math.max(1, Math.min(limit, 200))}`);
@@ -2521,8 +2523,8 @@ export async function downloadReport(
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const { blob, filename } = await apiFetchBlob(`/api/reports/export/${exportPath}${suffix}`);
   const resolvedFilename =
-    filename ||
     params?.filename ||
+    filename ||
     (format === "csv" ? "relatorio_sentimento.csv" : "relatorio_sentimento.pdf");
   triggerBlobDownload(blob, resolvedFilename);
 }

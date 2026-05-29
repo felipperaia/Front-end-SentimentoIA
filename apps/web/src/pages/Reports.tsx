@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
+  ApiRequestError,
   downloadReport,
   type ReportsListItem,
   sentimentApi,
@@ -37,6 +38,35 @@ function resolveDefaultDateRange(days = 30): { from: string; to: string } {
   };
 }
 
+function resolveReportExportErrorMessage(error: unknown, fallbackMessage: string): string {
+  if (error instanceof ApiRequestError) {
+    const status = error.status ?? 0;
+    if (status === 400) {
+      return "Filtro de exportacao invalido. Revise empresa e periodo selecionados.";
+    }
+    if (status === 404) {
+      return "Nenhum dado encontrado para exportacao com os filtros informados.";
+    }
+    if (status === 408 || status === 504) {
+      return "A exportacao excedeu o tempo limite. Tente reduzir o periodo e tente novamente.";
+    }
+    if (status >= 500) {
+      return "Falha temporaria no servidor ao gerar o arquivo. Tente novamente em instantes.";
+    }
+    return error.message || fallbackMessage;
+  }
+
+  if (error instanceof Error) {
+    const normalized = error.message.trim().toLowerCase();
+    if (normalized.includes("timeout") || normalized.includes("tempo limite")) {
+      return "A exportacao excedeu o tempo limite. Tente reduzir o periodo e tente novamente.";
+    }
+    return error.message || fallbackMessage;
+  }
+
+  return fallbackMessage;
+}
+
 export default function ReportsPage() {
   const { t } = useAppSettings();
   const [defaultRange] = useState(() => resolveDefaultDateRange(30));
@@ -56,6 +86,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeExport, setActiveExport] = useState<ExportAction | null>(null);
+  const exportInFlightRef = useRef(false);
   const hasRequiredFilters = Boolean(selectedCompanySlug && fromDate && toDate);
 
 
@@ -87,11 +118,21 @@ export default function ReportsPage() {
   }
 
   async function handleDownload(action: ExportAction) {
+    if (exportInFlightRef.current) {
+      return;
+    }
+
     if (!hasRequiredFilters) {
       toast.error("Selecione empresa e período antes de exportar.");
       return;
     }
 
+    if (fromDate > toDate) {
+      toast.error("Periodo invalido: a data inicial deve ser menor ou igual a data final.");
+      return;
+    }
+
+    exportInFlightRef.current = true;
     setActiveExport(action);
 
     try {
@@ -108,6 +149,7 @@ export default function ReportsPage() {
           from: fromDate,
           to: toDate,
           limit,
+          filename: `insights-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`,
         });
       } else {
         await downloadReport("pdf", {
@@ -117,13 +159,14 @@ export default function ReportsPage() {
           source: action === "pdf-dashboard" ? "dashboard" : "metrics",
           filename:
             action === "pdf-dashboard"
-              ? `dashboard-apresentação-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`
-              : `métricas-apresentação-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`,
+              ? `dashboard-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`
+              : `metricas-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`,
         });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("reports.error"));
+      toast.error(resolveReportExportErrorMessage(err, t("reports.error")));
     } finally {
+      exportInFlightRef.current = false;
       setActiveExport(null);
     }
   }
