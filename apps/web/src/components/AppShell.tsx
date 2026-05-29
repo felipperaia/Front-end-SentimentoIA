@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { Activity, BarChart3, BellRing, Brain, FileText, LayoutDashboard, LogOut, Search, Settings2, ShieldCheck, Users2, type LucideIcon } from "lucide-react";
+import { BarChart3, Brain, FileText, LayoutDashboard, LogOut, Search, Settings2, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 
@@ -21,7 +21,7 @@ type MenuItem = {
 
 export function AppShell({ title, subtitle, actions, children }: Readonly<ShellProps>) {
   const [location, setLocation] = useLocation();
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
   const { resetToDefaults, t } = useAppSettings();
 
   async function handleLogout() {
@@ -37,13 +37,7 @@ export function AppShell({ title, subtitle, actions, children }: Readonly<ShellP
     { path: "/analysis", label: t("nav.insights"), icon: Brain },
     { path: "/metrics", label: t("nav.metrics"), icon: BarChart3 },
     { path: "/reports", label: t("nav.reports"), icon: FileText },
-    { path: "/alerts", label: t("nav.alerts"), icon: BellRing },
-    { path: "/privacy", label: t("nav.privacy"), icon: ShieldCheck },
-    { path: "/diagnostics", label: t("nav.diagnostics"), icon: Activity },
     { path: "/settings", label: t("nav.settings"), icon: Settings2 },
-    ...(user?.role === "admin"
-      ? [{ path: "/admin", label: t("nav.admin"), icon: Users2 } satisfies MenuItem]
-      : []),
   ];
 
   return (

@@ -20,9 +20,11 @@ import {
   type CommitResponse,
   type StagingCommentsResponse,
 } from "@/lib/api";
-import { AlertCircle, Database, Save, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
+import { Activity, AlertCircle, BellRing, Database, Save, ShieldCheck, ShieldOff, Trash2, Users2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type ProfileDraft = {
   name: string;
@@ -272,6 +274,9 @@ function usernameFromEmail(email: string) {
 
 export default function SettingsPage() {
   const { resetToDefaults, settings, loading, saving, refreshSettings, saveSettings, t } = useAppSettings();
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>({
     name: "",
@@ -720,6 +725,7 @@ export default function SettingsPage() {
           <a href="#security" className="secondary-btn">Seguranca</a>
           <a href="#mfa" className="secondary-btn">MFA</a>
           <a href="#ingest" className="secondary-btn">Ingestao</a>
+          <a href="#workspace-areas" className="secondary-btn">Areas</a>
           <a href="#danger-zone" className="secondary-btn text-rose-600">Danger Zone</a>
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
@@ -989,6 +995,76 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+      </section>
+
+      <section id="workspace-areas" className="mb-5 app-panel p-6 md:p-7">
+        <header className="flex flex-wrap items-center gap-2">
+          <ShieldCheck size={18} className="text-[color:var(--brand)]" />
+          <h2 className="panel-title">Outras areas</h2>
+        </header>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Acesse alertas, central de privacidade e diagnostico do sistema.
+        </p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <button
+            type="button"
+            className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/10 p-4 text-left transition-colors hover:bg-muted/30"
+            onClick={() => setLocation("/alerts")}
+          >
+            <BellRing size={18} className="text-[color:var(--brand)]" />
+            <span>
+              <span className="block text-sm font-medium text-foreground">Alertas</span>
+              <span className="block text-xs text-muted-foreground">
+                Alertas gerados a partir das mencoes monitoradas.
+              </span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/10 p-4 text-left transition-colors hover:bg-muted/30"
+            onClick={() => setLocation("/privacy")}
+          >
+            <ShieldCheck size={18} className="text-[color:var(--brand)]" />
+            <span>
+              <span className="block text-sm font-medium text-foreground">Privacidade</span>
+              <span className="block text-xs text-muted-foreground">
+                Politica, direitos LGPD, consentimento e resumo de dados.
+              </span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/10 p-4 text-left transition-colors hover:bg-muted/30"
+            onClick={() => setLocation("/diagnostics")}
+          >
+            <Activity size={18} className="text-[color:var(--brand)]" />
+            <span>
+              <span className="block text-sm font-medium text-foreground">Diagnostico</span>
+              <span className="block text-xs text-muted-foreground">
+                Disponibilidade da API e estado das integracoes.
+              </span>
+            </span>
+          </button>
+
+          {isAdmin ? (
+            <button
+              type="button"
+              className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/10 p-4 text-left transition-colors hover:bg-muted/30"
+              onClick={() => setLocation("/admin")}
+            >
+              <Users2 size={18} className="text-[color:var(--brand)]" />
+              <span>
+                <span className="block text-sm font-medium text-foreground">Administracao</span>
+                <span className="block text-xs text-muted-foreground">
+                  KPIs, usuarios, logs de auditoria e alertas globais.
+                </span>
+              </span>
+            </button>
+          ) : null}
+        </div>
       </section>
 
       <section id="ingest" className="mb-5 app-panel p-6 md:p-7">
