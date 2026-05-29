@@ -146,6 +146,15 @@ export function AppSettingsProvider({ children }: Readonly<{ children: React.Rea
 
   const setLocalePreference = useCallback((locale: AppLocale) => {
     const normalizedLocale: AppLocale = locale === "en-US" ? "en-US" : "pt-BR";
+
+    // Pré-login (sem sessão): troca o idioma apenas em memória, sem persistir.
+    // Assim o usuário escolhe o idioma nas telas públicas (home/login/cadastro/etc),
+    // mas ao recarregar (F5) volta ao idioma padrão.
+    if (!getToken()) {
+      setSettings((current) => ({ ...current, locale: normalizedLocale }));
+      return;
+    }
+
     void saveSettings({ locale: normalizedLocale });
   }, [saveSettings]);
 

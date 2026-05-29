@@ -201,6 +201,10 @@ export const TRANSLATIONS = {
     "pt-BR": "Insights acionáveis",
     "en-US": "Actionable insights",
   },
+  "home.metricInsightsValue": {
+    "pt-BR": "Inteligência Artificial",
+    "en-US": "Artificial Intelligence",
+  },
   "home.metricReports": {
     "pt-BR": "Exportação executiva",
     "en-US": "Executive export",

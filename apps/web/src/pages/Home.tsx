@@ -118,7 +118,7 @@ export default function Home() {
 
             <div className="mt-12 grid gap-3 sm:grid-cols-3">
               <HeroMetric label={t("home.metricMentions")} value="Reddit · YouTube · App Store · Play Store · Web" />
-              <HeroMetric label={t("home.metricInsights")} value="Backend API" />
+              <HeroMetric label={t("home.metricInsights")} value={t("home.metricInsightsValue")} />
               <HeroMetric label={t("home.metricReports")} value="CSV · PDF" />
             </div>
           </div>
