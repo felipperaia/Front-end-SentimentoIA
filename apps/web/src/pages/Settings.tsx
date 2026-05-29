@@ -12,7 +12,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { useAppSettings } from "@/contexts/AppSettingsContext";
-import { ApiRequestError, authApi, sentimentApi, type AppTheme } from "@/lib/api";
+import {
+  ApiRequestError,
+  authApi,
+  sentimentApi,
+  type AppTheme,
+  type CommitResponse,
+  type StagingCommentsResponse,
+} from "@/lib/api";
 import { AlertCircle, Database, Save, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -299,6 +306,10 @@ export default function SettingsPage() {
   const [ingestPayload, setIngestPayload] = useState<Record<string, unknown>[]>([]);
   const [ingestParsedCount, setIngestParsedCount] = useState(0);
   const [ingestSummary, setIngestSummary] = useState<IngestSummary | null>(null);
+  const [stagingBusy, setStagingBusy] = useState(false);
+  const [stagingPreview, setStagingPreview] = useState<StagingCommentsResponse | null>(null);
+  const [commitBusy, setCommitBusy] = useState(false);
+  const [commitResult, setCommitResult] = useState<CommitResponse | null>(null);
 
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -572,6 +583,8 @@ export default function SettingsPage() {
 
     setIngestBusy(true);
     setIngestSummary(null);
+    setStagingPreview(null);
+    setCommitResult(null);
 
     try {
       const response = await sentimentApi.ingest(ingestPayload);
@@ -615,6 +628,52 @@ export default function SettingsPage() {
       }
     } finally {
       setIngestBusy(false);
+    }
+  }
+
+  async function handlePreviewStaging() {
+    const batchId = ingestSummary?.batchId;
+    if (!batchId) {
+      toast.error("Envie um arquivo para ingestao antes de pre-visualizar o staging.");
+      return;
+    }
+
+    setStagingBusy(true);
+    try {
+      const preview = await sentimentApi.listStagingComments({ batch_id: batchId, limit: 100 });
+      setStagingPreview(preview);
+      if (preview.total === 0) {
+        toast.info("Nenhum comentario encontrado no staging para este lote.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao carregar o staging.");
+    } finally {
+      setStagingBusy(false);
+    }
+  }
+
+  async function handleCommitStaging() {
+    const batchId = ingestSummary?.batchId;
+    if (!batchId) {
+      toast.error("Envie um arquivo para ingestao antes de confirmar a importacao.");
+      return;
+    }
+
+    setCommitBusy(true);
+    try {
+      const result = await sentimentApi.commitStaging({ batch_id: batchId });
+      setCommitResult(result);
+      toast.success(
+        `Importacao confirmada: ${result.inserted} registro(s) enviado(s) para producao.`
+      );
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        toast.error(resolveApiRequestErrorDetails(err));
+      } else {
+        toast.error(err instanceof Error ? err.message : "Falha ao confirmar importacao para producao.");
+      }
+    } finally {
+      setCommitBusy(false);
     }
   }
 
@@ -1013,6 +1072,61 @@ export default function SettingsPage() {
               ) : (
                 <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">Sem erros por indice.</p>
               )}
+            </div>
+          ) : null}
+
+          {ingestSummary?.batchId ? (
+            <div className="rounded-xl border border-border/70 bg-muted/10 p-4">
+              <p className="text-sm font-semibold">Pre-visualizacao e commit para producao</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Os dados ingeridos ficam no staging (secundario). Pre-visualize e confirme a importacao
+                para que apareçam no dashboard (primario).
+              </p>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  disabled={stagingBusy || commitBusy}
+                  onClick={() => void handlePreviewStaging()}
+                >
+                  {stagingBusy ? t("common.processing") : "Pre-visualizar staging"}
+                </button>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  disabled={commitBusy || stagingBusy}
+                  onClick={() => void handleCommitStaging()}
+                >
+                  {commitBusy ? t("common.processing") : "Confirmar importacao para producao"}
+                </button>
+              </div>
+
+              {stagingPreview ? (
+                <div className="mt-3 rounded-lg border border-border/70 bg-background p-3 text-xs text-muted-foreground">
+                  <p className="font-semibold text-foreground">
+                    Staging: {stagingPreview.total} registro(s) (exibindo {stagingPreview.items.length})
+                  </p>
+                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {stagingPreview.items.slice(0, 20).map((item) => (
+                      <li key={item.id} className="rounded border border-border/50 p-2">
+                        <span className="font-medium text-foreground">[{item.source}]</span>{" "}
+                        {item.company_name || item.company_slug || "-"} —{" "}
+                        {item.text ? item.text.slice(0, 120) : "(sem texto)"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {commitResult ? (
+                <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
+                  <p>Commit ID: {commitResult.commit_id || "-"}</p>
+                  <p>Selecionados: {commitResult.selected}</p>
+                  <p>Inseridos no primario: {commitResult.inserted}</p>
+                  <p>Status: {commitResult.status || "-"}</p>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

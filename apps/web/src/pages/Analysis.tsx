@@ -12,8 +12,6 @@ import { useAppSettings } from "@/contexts/AppSettingsContext";
 import {
   Brain,
   Clock3,
-  Download,
-  FileText,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -87,10 +85,10 @@ function resolveInsightPeriodLabel(item: InsightItem): string {
   }
 
   if (item.period_from || item.period_to) {
-    return item.period_from || item.period_to || "Periodo nao informado";
+    return item.period_from || item.period_to || "Período não informado";
   }
 
-  return item.batch_id || "Periodo nao informado";
+  return item.batch_id || "Período não informado";
 }
 
 function resolveConfidenceBadge(confidence: number, t: ReturnType<typeof useAppSettings>["t"]) {
@@ -132,7 +130,6 @@ export default function AnalysisPage() {
   const [items, setItems] = useState<InsightItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [activeExport, setActiveExport] = useState<"pdf" | "csv" | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<PriorityUrgencyFilter>("any");
@@ -199,7 +196,7 @@ export default function AnalysisPage() {
 
   async function handleGenerate() {
     if (!hasRequiredFilters) {
-      toast.error("Selecione empresa e periodo antes de gerar insights.");
+      toast.error("Selecione empresa e período antes de gerar insights.");
       return;
     }
 
@@ -227,8 +224,8 @@ export default function AnalysisPage() {
         const processedCount = Number(meta.processed_count ?? 0);
         const fallbackMessage =
           threshold > 0
-            ? `Ainda nao ha mencoes suficientes para gerar insight (${processedCount}/${threshold}). Execute mais buscas ou aguarde o processamento.`
-            : "Ainda nao ha mencoes suficientes para gerar insight. Execute mais buscas ou aguarde o processamento.";
+            ? `Ainda não há menções suficientes para gerar insight (${processedCount}/${threshold}). Execute mais buscas ou aguarde o processamento.`
+            : "Ainda não há menções suficientes para gerar insight. Execute mais buscas ou aguarde o processamento.";
 
         const actionableMessage =
           typeof meta.actionable_message === "string" && meta.actionable_message.trim().length > 0
@@ -261,35 +258,6 @@ export default function AnalysisPage() {
     }
   }
 
-  async function handleInsightsExport(format: "pdf" | "csv") {
-    if (!hasRequiredFilters) {
-      toast.error("Selecione empresa e periodo antes de exportar insights.");
-      return;
-    }
-
-    setActiveExport(format);
-    try {
-      const exportFilters = {
-        priority: priorityFilter === "any" ? undefined : priorityFilter,
-        resolution: resolutionFilter === "any" ? undefined : resolutionFilter,
-        companySlug: selectedCompanySlug,
-        from: fromDate,
-        to: toDate,
-        limit: 100,
-      };
-
-      if (format === "pdf") {
-        await sentimentApi.exportInsightsPdf(exportFilters);
-      } else {
-        await sentimentApi.exportInsightsCsv(exportFilters);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha ao exportar insights.");
-    } finally {
-      setActiveExport(null);
-    }
-  }
-
   let content: ReactNode;
   if (!hasRequiredFilters) {
     content = (
@@ -297,7 +265,7 @@ export default function AnalysisPage() {
         <Sparkles className="mx-auto mb-4 h-12 w-12 text-[color:var(--brand)]" />
         <h2 className="text-2xl font-semibold">Selecione uma empresa para iniciar</h2>
         <p className="mb-6 mt-2 text-muted-foreground">
-          Insights sao carregados apenas com empresa e faixa de datas definidas.
+          Insights são carregados apenas com empresa e faixa de datas definidas.
         </p>
       </div>
     );
@@ -341,8 +309,8 @@ export default function AnalysisPage() {
                   <h2 className="text-xl font-semibold">{item.executive_summary || t("analysis.untitled")}</h2>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span className="badge-chip">{item.trend || t("analysis.undefinedTrend")}</span>
-                    <span className="badge-chip">Empresa: {item.company_name || item.company || "Nao informada"}</span>
-                    <span className="badge-chip">Periodo: {resolveInsightPeriodLabel(item)}</span>
+                    <span className="badge-chip">Empresa: {item.company_name || item.company || "Não informada"}</span>
+                    <span className="badge-chip">Período: {resolveInsightPeriodLabel(item)}</span>
                     <span className="badge-chip">{t("analysis.trigger")}: {item.trigger || t("analysis.manual")}</span>
                     <span className={priorityBadgeClass(item.priority)}>
                       Prioridade: {priorityLabel(item.priority)}
@@ -400,7 +368,7 @@ export default function AnalysisPage() {
                   <p>{item.company_name || item.company || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-background/75 p-4">
-                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Periodo</h3>
+                  <h3 className="mb-2 text-sm uppercase text-muted-foreground">Período</h3>
                   <p>{resolveInsightPeriodLabel(item)}</p>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-background/75 p-4">
@@ -440,27 +408,9 @@ export default function AnalysisPage() {
   return (
     <AppShell
       title={t("analysis.title")}
-      subtitle={hasRequiredFilters ? t("analysis.subtitle") : "Escolha empresa e periodo para consultar insights."}
+      subtitle={hasRequiredFilters ? t("analysis.subtitle") : "Escolha empresa e período para consultar insights."}
       actions={
         <>
-          <button
-            onClick={() => {
-              void handleInsightsExport("pdf");
-            }}
-            className="secondary-btn"
-            disabled={activeExport !== null || !hasRequiredFilters || items.length === 0}
-          >
-            <FileText size={16} /> {activeExport === "pdf" ? t("common.processing") : "Exportar PDF"}
-          </button>
-          <button
-            onClick={() => {
-              void handleInsightsExport("csv");
-            }}
-            className="secondary-btn"
-            disabled={activeExport !== null || !hasRequiredFilters || items.length === 0}
-          >
-            <Download size={16} /> {activeExport === "csv" ? t("common.processing") : "Exportar CSV"}
-          </button>
           <button onClick={() => void loadInsights()} className="secondary-btn" disabled={!hasRequiredFilters}>
             <RefreshCw size={16} /> {t("common.refresh")}
           </button>
@@ -498,7 +448,7 @@ export default function AnalysisPage() {
         </label>
 
         <label className="flex items-center gap-2">
-          <span className="text-muted-foreground">Ate:</span>
+          <span className="text-muted-foreground">Até:</span>
           <input
             type="date"
             className="field-input h-9 py-1"
@@ -533,7 +483,7 @@ export default function AnalysisPage() {
         </label>
 
         <label className="flex items-center gap-2">
-          <span className="text-muted-foreground">Urgencia:</span>
+          <span className="text-muted-foreground">Urgência:</span>
           <select
             className="field-input h-9 py-1"
             value={urgencyFilter}
@@ -543,7 +493,7 @@ export default function AnalysisPage() {
           >
             <option value="any">Qualquer</option>
             <option value="high">Alta</option>
-            <option value="medium">Media</option>
+            <option value="medium">Média</option>
             <option value="low">Baixa</option>
           </select>
         </label>

@@ -458,7 +458,7 @@ export default function SearchPage() {
               </p>
               <p>
                 <span className="text-muted-foreground">Janela:</span> {periodDays} dias
-                <span className="text-muted-foreground"> ({searchDateRange.from} ate {searchDateRange.to})</span>
+                <span className="text-muted-foreground"> ({searchDateRange.from} até {searchDateRange.to})</span>
               </p>
               <p>
                 <span className="text-muted-foreground">Localidade:</span> {locality || "-"}

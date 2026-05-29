@@ -78,7 +78,7 @@ export default function NpsModal() {
         setVisible(true);
       }, 3000);
     } catch {
-      // Nao interrompe a navegação; apenas evita abertura indevida.
+      // Não interrompe a navegação; apenas evita abertura indevida.
     } finally {
       checkingRef.current = false;
     }
@@ -124,7 +124,7 @@ export default function NpsModal() {
       sessionStorage.removeItem(NPS_SESSION_ID_KEY);
       setVisible(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Nao foi possivel enviar sua avaliacao agora. Tente novamente.");
+      toast.error(err instanceof Error ? err.message : "Não foi possível enviar sua avaliação agora. Tente novamente.");
     } finally {
       setSending(false);
     }
@@ -139,7 +139,7 @@ export default function NpsModal() {
           route: currentRoutePath(),
         });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Nao foi possivel registrar o adiamento agora. Tente novamente.");
+        toast.error(err instanceof Error ? err.message : "Não foi possível registrar o adiamento agora. Tente novamente.");
         return;
       }
     }

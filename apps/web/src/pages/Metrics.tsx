@@ -114,7 +114,7 @@ export default function MetricsPage() {
       const response = await sentimentApi.metrics(params);
       setData(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar metricas.");
+      setError(err instanceof Error ? err.message : "Erro ao carregar métricas.");
       setData(null);
     } finally {
       setLoading(false);
@@ -174,7 +174,7 @@ export default function MetricsPage() {
 
   const companyName = useMemo(() => {
     if (data?.company_name) return data.company_name;
-    return companies.find((company) => company.slug === selectedCompanySlug)?.name || "Nao selecionada";
+    return companies.find((company) => company.slug === selectedCompanySlug)?.name || "Não selecionada";
   }, [companies, data?.company_name, selectedCompanySlug]);
 
   return (
@@ -182,8 +182,8 @@ export default function MetricsPage() {
       title={t("metrics.title")}
       subtitle={
         hasRequiredFilters
-          ? `Metricas por empresa e periodo. Empresa atual: ${companyName}.`
-          : "Selecione empresa e periodo para gerar metricas."
+          ? `Métricas por empresa e período. Empresa atual: ${companyName}.`
+          : "Selecione empresa e período para gerar métricas."
       }
       actions={
         <button
@@ -244,7 +244,7 @@ export default function MetricsPage() {
           </label>
 
           <label className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Ate:</span>
+            <span className="text-sm text-muted-foreground">Até:</span>
             <input
               type="date"
               className="field-input h-10 py-2"
@@ -257,7 +257,7 @@ export default function MetricsPage() {
           </label>
 
           <div className="rounded-md border border-border/70 bg-background/70 px-3 py-2 text-sm text-muted-foreground">
-            <p>Periodo atual</p>
+            <p>Período atual</p>
             <p className="font-medium text-foreground">{fromDate && toDate ? `${fromDate} a ${toDate}` : "-"}</p>
           </div>
 
@@ -268,13 +268,13 @@ export default function MetricsPage() {
               onClick={() => void loadMetrics()}
               disabled={!hasRequiredFilters || loading}
             >
-              <RefreshCw size={16} /> {loading ? t("common.processing") : "Gerar metricas"}
+              <RefreshCw size={16} /> {loading ? t("common.processing") : "Gerar métricas"}
             </button>
           </div>
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          A geracao consulta metricas persistidas no backend primario para o filtro atual, reutilizando resultados quando existirem.
+          A geração consulta métricas persistidas no backend primário para o filtro atual, reutilizando resultados quando existirem.
         </p>
       </section>
 
@@ -286,18 +286,18 @@ export default function MetricsPage() {
 
       {!selectedCompanySlug ? (
         <section className="app-panel mb-6 p-8 text-center">
-          <p className="text-base font-semibold">Selecione uma empresa para habilitar metricas</p>
+          <p className="text-base font-semibold">Selecione uma empresa para habilitar métricas</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Sem empresa selecionada nenhuma requisicao pesada e executada.
+            Sem empresa selecionada, nenhuma requisição pesada é executada.
           </p>
         </section>
       ) : null}
 
       {selectedCompanySlug && !hasRequested && !loading ? (
         <section className="app-panel mb-6 p-8 text-center">
-          <p className="text-base font-semibold">Aguardando geracao de metricas</p>
+          <p className="text-base font-semibold">Aguardando geração de métricas</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Clique em "Gerar metricas" para consultar o periodo selecionado.
+            Clique em "Gerar métricas" para consultar o período selecionado.
           </p>
         </section>
       ) : null}
@@ -305,7 +305,7 @@ export default function MetricsPage() {
       {selectedCompanySlug && loading ? (
         <section className="app-panel mb-6 p-8 text-center">
           <RefreshCw className="mx-auto h-8 w-8 animate-spin text-[color:var(--brand)]" />
-          <p className="mt-3 text-sm text-muted-foreground">Carregando metricas...</p>
+          <p className="mt-3 text-sm text-muted-foreground">Carregando métricas...</p>
         </section>
       ) : null}
 
@@ -313,12 +313,12 @@ export default function MetricsPage() {
       <>
       <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div className="stat-card p-5">
-          <p className="text-sm uppercase text-muted-foreground">Volume de mencoes</p>
+          <p className="text-sm uppercase text-muted-foreground">Volume de menções</p>
           <p className="mt-2 text-2xl font-semibold">{data?.total_mentions ?? 0}</p>
         </div>
 
         <div className="stat-card p-5">
-          <p className="text-sm uppercase text-muted-foreground">Urgencia media</p>
+          <p className="text-sm uppercase text-muted-foreground">Urgência média</p>
           <p className="mt-2 text-2xl font-semibold">{`${averageUrgencyPercent.toFixed(1)}%`}</p>
         </div>
 
@@ -330,7 +330,7 @@ export default function MetricsPage() {
 
       <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
         <article className="app-panel p-5 md:p-6">
-          <h2 className="panel-title">Distribuicao de sentimento</h2>
+          <h2 className="panel-title">Distribuição de sentimento</h2>
           {sentimentData.length === 0 ? (
             <p className="mt-4 text-sm text-muted-foreground">Sem dados de sentimento para exibir.</p>
           ) : (
@@ -353,9 +353,9 @@ export default function MetricsPage() {
         </article>
 
         <article className="app-panel p-5 md:p-6">
-          <h2 className="panel-title">Evolucao de urgencia</h2>
+          <h2 className="panel-title">Evolução de urgência</h2>
           {urgencyEvolutionData.length === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">Sem dados de evolucao de urgencia para exibir.</p>
+            <p className="mt-4 text-sm text-muted-foreground">Sem dados de evolução de urgência para exibir.</p>
           ) : (
             <div className="h-72 mt-4">
               <ResponsiveContainer width="100%" height="100%">
@@ -368,7 +368,7 @@ export default function MetricsPage() {
                     stroke="var(--muted-foreground)"
                   />
                   <Tooltip
-                    formatter={(value: number | string) => [`${Math.round(Number(value) * 100)}%`, "Urgencia"]}
+                    formatter={(value: number | string) => [`${Math.round(Number(value) * 100)}%`, "Urgência"]}
                   />
                   <Line type="monotone" dataKey="avg_urgency" stroke="#f97316" strokeWidth={2} dot={false} />
                 </LineChart>

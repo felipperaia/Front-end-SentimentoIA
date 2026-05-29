@@ -129,6 +129,22 @@ export const TRANSLATIONS = {
     "pt-BR": "Configurações",
     "en-US": "Settings",
   },
+  "nav.alerts": {
+    "pt-BR": "Alertas",
+    "en-US": "Alerts",
+  },
+  "nav.privacy": {
+    "pt-BR": "Privacidade",
+    "en-US": "Privacy",
+  },
+  "nav.diagnostics": {
+    "pt-BR": "Diagnóstico",
+    "en-US": "Diagnostics",
+  },
+  "nav.admin": {
+    "pt-BR": "Administração",
+    "en-US": "Admin",
+  },
   "nav.login": {
     "pt-BR": "Entrar",
     "en-US": "Log in",
@@ -1302,7 +1318,7 @@ export const TRANSLATIONS = {
     "en-US": "AI is temporarily unavailable. Please try again shortly.",
   },
   "api.aiUpstreamError": {
-    "pt-BR": "Nao foi possivel concluir a resposta de IA no momento. Tente novamente em instantes.",
+    "pt-BR": "Não foi possível concluir a resposta de IA no momento. Tente novamente em instantes.",
     "en-US": "Unable to complete the AI response right now. Please try again shortly.",
   },
   "api.reportError": {

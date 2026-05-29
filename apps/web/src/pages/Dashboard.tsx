@@ -82,7 +82,7 @@ const STATUS_BANNER_STATES: Record<StatusBannerState["level"], Omit<StatusBanner
     className: "bg-yellow-500 text-black",
   },
   low: {
-    label: "Situacao Estavel",
+    label: "Situação Estável",
     emoji: "LOW",
     className: "bg-blue-500 text-white",
   },
@@ -211,7 +211,7 @@ function resolveStatusBanner(score: number, negativeRatio: number): StatusBanner
 function resolveTrend(trend?: string) {
   const normalized = String(trend || "").toLowerCase();
   if (!normalized) {
-    return { symbol: "->", label: "Sem tendencia" };
+    return { symbol: "->", label: "Sem tendência" };
   }
   if (
     normalized.includes("up") ||
@@ -229,7 +229,7 @@ function resolveTrend(trend?: string) {
   ) {
     return { symbol: "-", label: "Em queda" };
   }
-  return { symbol: "=", label: "Estavel" };
+  return { symbol: "=", label: "Estável" };
 }
 
 function formatUrgencyDate(rawDate: string): string {
@@ -257,14 +257,14 @@ function resolveDefaultDateRange(days = 30): { from: string; to: string } {
 }
 
 function resolvePeriodLabel(data: DashboardResponse | null): string {
-  if (!data) return "Periodo nao informado";
+  if (!data) return "Período não informado";
   const explicit = String(data.period_label || data.metrics?.period_label || "").trim();
   if (explicit) return explicit;
 
   const from = String(data.period_from || data.metrics?.period_from || "").trim();
   const to = String(data.period_to || data.metrics?.period_to || "").trim();
   if (from && to) return `${from} - ${to}`;
-  return from || to || "Periodo nao informado";
+  return from || to || "Período não informado";
 }
 
 function resolveCurrentCompanyName(data: DashboardResponse | null, selectedCompany?: CompanyItem | null): string {
@@ -281,7 +281,7 @@ function resolveCurrentCompanyName(data: DashboardResponse | null, selectedCompa
   const fromQuery = String(data?.query || "").trim();
   if (fromQuery) return fromQuery;
 
-  return "Visao geral";
+  return "Visão geral";
 }
 
 function resolveTopThemes(rawThemes: DashboardMetrics["top_themes"] | undefined): string[] {
@@ -467,7 +467,7 @@ export default function Dashboard() { // NOSONAR
       subtitle={
         hasRequiredFilters && data
           ? `Empresa atual: ${dashboardCompanyName} - ${dashboardPeriodLabel}`
-          : "Selecione uma empresa e um periodo para carregar o dashboard."
+          : "Selecione uma empresa e um período para carregar o dashboard."
       }
       actions={
         <>
@@ -520,7 +520,7 @@ export default function Dashboard() { // NOSONAR
           </label>
 
           <label className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Ate:</span>
+            <span className="text-sm text-muted-foreground">Até:</span>
             <input
               type="date"
               className="field-input h-10 py-2"
@@ -530,7 +530,7 @@ export default function Dashboard() { // NOSONAR
           </label>
 
           <div className="rounded-md border border-border/70 bg-background/70 px-3 py-2 text-sm text-muted-foreground">
-            <p>Periodo aplicado</p>
+            <p>Período aplicado</p>
             <p className="font-medium text-foreground">
               {fromDate && toDate ? `${fromDate} a ${toDate}` : "Defina as datas"}
             </p>
@@ -560,7 +560,7 @@ export default function Dashboard() { // NOSONAR
           <SearchIcon className="mx-auto mb-4 h-10 w-10 text-[color:var(--brand)]" />
           <h2 className="text-2xl font-semibold">Selecione uma empresa para iniciar</h2>
           <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
-            O dashboard so carrega dados apos a escolha explicita da empresa e do periodo.
+            O dashboard só carrega dados após a escolha explícita da empresa e do período.
           </p>
         </div>
       ) : loading ? (
@@ -587,7 +587,7 @@ export default function Dashboard() { // NOSONAR
               <span>{statusBanner.label}</span>
             </p>
             <p className="mt-1 text-xs opacity-90">
-              Score: {sentimentScore}/100 - Mencoes negativas: {negativeCount} ({(negativeRatio * 100).toFixed(1)}%)
+              Score: {sentimentScore}/100 - Menções negativas: {negativeCount} ({(negativeRatio * 100).toFixed(1)}%)
             </p>
           </section>
 
@@ -612,7 +612,7 @@ export default function Dashboard() { // NOSONAR
               label={t("dashboard.metricUrgency")}
               value={`${averageUrgency.toFixed(1)}%`}
             />
-            <MetricCard icon={ChartNoAxesCombined} label="Tendencia" value={`${trend.symbol} ${trend.label}`} />
+            <MetricCard icon={ChartNoAxesCombined} label="Tendência" value={`${trend.symbol} ${trend.label}`} />
             <MetricCard
               icon={FileText}
               label="Top temas"
@@ -682,9 +682,9 @@ export default function Dashboard() { // NOSONAR
 
           <section className="mb-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
             <article className="app-panel p-5 md:p-6">
-              <h2 className="panel-title">Evolucao da Urgencia</h2>
+              <h2 className="panel-title">Evolução da Urgência</h2>
               {urgencyTrend.length === 0 ? (
-                <p className="mt-4 text-sm text-muted-foreground">Sem dados de evolucao de urgencia para exibir.</p>
+                <p className="mt-4 text-sm text-muted-foreground">Sem dados de evolução de urgência para exibir.</p>
               ) : (
                 <div className="h-[260px] mt-4">
                   <ResponsiveContainer width="100%" height="100%">
@@ -693,7 +693,7 @@ export default function Dashboard() { // NOSONAR
                       <XAxis dataKey="date" tickFormatter={formatUrgencyDate} />
                       <YAxis domain={[0, 1]} tickFormatter={(value: number) => `${Math.round(value * 100)}%`} />
                       <Tooltip
-                        formatter={(value: number | string) => [`${Math.round(Number(value) * 100)}%`, "Urgencia media"]}
+                        formatter={(value: number | string) => [`${Math.round(Number(value) * 100)}%`, "Urgência média"]}
                       />
                       <Line type="monotone" dataKey="avg_urgency" stroke="#f97316" strokeWidth={2} dot={false} />
                     </LineChart>

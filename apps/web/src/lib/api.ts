@@ -48,7 +48,7 @@ const API_INGEST_PATH = resolvedApiIngestPath.replace(/\/+$/, "") || "api/ingest
 const LONG_PATHS = ["/api/search", API_INGEST_PATH] as const;
 const LONG_REQUEST_TIMEOUT_MS = 120_000;
 const SEARCH_TIMEOUT_MESSAGE =
-  "A busca demorou mais que o esperado. Tente selecionar menos fontes ou reduza o periodo de busca.";
+  "A busca demorou mais que o esperado. Tente selecionar menos fontes ou reduza o período de busca.";
 const AI_UPSTREAM_PATH_PREFIXES = ["/api/chat", "/api/insights", "/api/analyze"] as const;
 const SESSION_EXPIRED_PATTERNS = [/session expired/i, /token expired/i, /jwt/i, /authentication required/i];
 const TIMEOUT_PATTERNS = [/timeout/i, /timed out/i, /deadline exceeded/i, /request aborted/i];
@@ -1346,19 +1346,15 @@ export const authApi = {
       body: JSON.stringify(payload),
     });
   },
-  async deleteAccount() {
-    try {
-      return await apiFetch<{ ok: boolean; message?: string }>("/api/auth/delete-account", {
-        method: "DELETE",
-      });
-    } catch (error) {
-      if (error instanceof ApiRequestError && error.status === 404) {
-        return apiFetch<{ ok: boolean; message?: string }>("/api/auth/account", {
-          method: "DELETE",
-        });
-      }
-      throw error;
-    }
+  deleteAccount(options?: { hard_delete?: boolean; delete_related_data?: boolean }) {
+    // Contrato oficial: DELETE /api/auth/me (query params opcionais hard_delete/delete_related_data).
+    const query = new URLSearchParams();
+    if (options?.hard_delete) query.set("hard_delete", "true");
+    if (options?.delete_related_data ?? true) query.set("delete_related_data", "true");
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return apiFetch<{ ok: boolean; message?: string }>(`/api/auth/me${suffix}`, {
+      method: "DELETE",
+    });
   },
   async logout() {
     try {
@@ -1482,19 +1478,6 @@ export type InsightItem = {
   updated_at?: string;
 };
 
-export type MetricsClassificationResponse = {
-  period_days: number;
-  total_analyzed: number;
-  avg_urgency_score: number;
-  avg_confidence: number;
-  critical_mentions: number;
-  by_sentiment: Record<string, number>;
-  by_criticality: Record<string, number>;
-  top_urgency_factors: Array<{ factor: string; count: number }>;
-  top_aspects_negative: Array<{ aspect: string; count: number }>;
-  sources_coverage: Array<{ source: string; count: number }>;
-};
-
 export type MetricsResponse = {
   company_id?: string;
   company_name?: string;
@@ -1615,12 +1598,126 @@ export type IngestResponse = {
   message?: string;
 };
 
+export type IngestionBatch = {
+  batch_id: string;
+  status?: string;
+  received_count: number;
+  inserted_count: number;
+  duplicate_count: number;
+  company_slugs: string[];
+  sources: string[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type StagingComment = {
+  id: string;
+  user_id?: string;
+  batch_id?: string;
+  company_name?: string;
+  company_slug?: string;
+  source: string;
+  text: string;
+  author?: string;
+  location?: string;
+  published_at?: string;
+  url?: string;
+  external_id?: string;
+};
+
+export type StagingCommentsResponse = {
+  total: number;
+  limit: number;
+  offset: number;
+  items: StagingComment[];
+};
+
+export type CommitResponse = {
+  commit_id: string | null;
+  status?: string;
+  selected: number;
+  inserted: number;
+  committed_at?: string;
+  batch_id?: string;
+  company_slug?: string;
+  source?: string;
+};
+
+export type AlertItem = {
+  id: string;
+  title?: string;
+  message?: string;
+  severity?: string;
+  search_id?: string;
+  created_at?: string;
+  [key: string]: unknown;
+};
+
+export type AdminUser = {
+  id: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  is_active?: boolean;
+  created_at?: string;
+  [key: string]: unknown;
+};
+
+export type AdminAuditLog = {
+  id: string;
+  action?: string;
+  user_id?: string;
+  detail?: string;
+  created_at?: string;
+  [key: string]: unknown;
+};
+
+export type AdminSystemStats = Record<string, unknown>;
+
+export type HealthResponse = {
+  status: string;
+  version?: string;
+};
+
 type IntegrationStatusResponse = {
   ingestion_json_enabled?: boolean;
   mongodb_secondary_configured?: boolean;
   ingestion_staging_collection?: string;
   [key: string]: unknown;
 };
+
+function normalizeIngestionBatch(item: unknown): IngestionBatch {
+  const raw = ensureObject(item);
+  return {
+    batch_id: asString(raw.batch_id || raw.id || raw._id, "unknown"),
+    status: asNullableString(raw.status),
+    received_count: Math.max(0, Math.round(asNumber(raw.received_count ?? raw.received, 0))),
+    inserted_count: Math.max(0, Math.round(asNumber(raw.inserted_count ?? raw.inserted, 0))),
+    duplicate_count: Math.max(0, Math.round(asNumber(raw.duplicate_count ?? raw.duplicates, 0))),
+    company_slugs: ensureArray<string>(raw.company_slugs),
+    sources: ensureArray<string>(raw.sources),
+    created_at: asNullableString(raw.created_at),
+    updated_at: asNullableString(raw.updated_at),
+  };
+}
+
+function normalizeStagingComment(item: unknown): StagingComment {
+  const raw = ensureObject(item);
+  return {
+    id: asString(raw.id || raw._id || raw.external_id, "unknown"),
+    user_id: asNullableString(raw.user_id),
+    batch_id: asNullableString(raw.batch_id),
+    company_name: asNullableString(raw.company_name),
+    company_slug: asNullableString(raw.company_slug),
+    source: asString(raw.source, "web"),
+    text: asString(raw.text || raw.snippet, ""),
+    author: asNullableString(raw.author),
+    location: asNullableString(raw.location),
+    published_at: asNullableString(raw.published_at),
+    url: asNullableString(raw.url || raw.canonical_url),
+    external_id: asNullableString(raw.external_id),
+  };
+}
 
 let ingestionCompatibilityChecked = false;
 
@@ -1788,13 +1885,21 @@ export const sentimentApi = {
       errors: normalizeSearchErrors(data.errors),
     } as SearchResponse;
   },
-  async mentions(params?: { batch_id?: string; search_id?: string; status?: string; sentiment?: string; limit?: number }) {
+  async mentions(params?: {
+    company_id?: string;
+    company_slug?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+    sentiment?: string;
+    limit?: number;
+  }) {
+    // Contrato oficial /api/mentions: companyId/companySlug, from/to, status, sentiment, limit.
     const query = new URLSearchParams();
-    const resolvedContextId = asNullableString(params?.batch_id) ?? asNullableString(params?.search_id);
-    if (resolvedContextId) {
-      query.set("batch_id", resolvedContextId);
-      query.set("search_id", resolvedContextId);
-    }
+    if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.company_slug) query.set("companySlug", params.company_slug);
+    if (params?.from) query.set("from", params.from);
+    if (params?.to) query.set("to", params.to);
 
     const resolvedStatus = asNullableString(params?.status);
     if (resolvedStatus && resolvedStatus !== "all") query.set("status", resolvedStatus);
@@ -1870,8 +1975,9 @@ export const sentimentApi = {
 
     if (payload?.company_id) requestPayload.company_id = payload.company_id;
     if (payload?.company_slug) requestPayload.company_slug = payload.company_slug;
-    if (payload?.from) requestPayload.from = payload.from;
-    if (payload?.to) requestPayload.to = payload.to;
+    // Contrato oficial usa period_from/period_to no corpo de /api/insights/generate.
+    if (payload?.from) requestPayload.period_from = payload.from;
+    if (payload?.to) requestPayload.period_to = payload.to;
 
     const raw = await apiFetch<any>("/api/insights/generate", {
       method: "POST",
@@ -1921,6 +2027,7 @@ export const sentimentApi = {
     to?: string;
     limit?: number;
   }): Promise<void> {
+    // Contrato oficial: GET /api/reports/export/insights.pdf.
     const query = new URLSearchParams();
     if (params?.priority) query.set("priority", params.priority);
     if (params?.resolution) query.set("resolution", params.resolution);
@@ -1931,32 +2038,8 @@ export const sentimentApi = {
     if (params?.limit) query.set("limit", String(params.limit));
 
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    const response = await rawFetch(`/api/insights/export/pdf${suffix}`);
-    const blob = await response.blob();
-    triggerBlobDownload(blob, `insights-${new Date().toISOString().slice(0, 10)}.pdf`);
-  },
-  async exportInsightsCsv(params?: {
-    priority?: string;
-    resolution?: string;
-    companyId?: string;
-    companySlug?: string;
-    from?: string;
-    to?: string;
-    limit?: number;
-  }): Promise<void> {
-    const query = new URLSearchParams();
-    if (params?.priority) query.set("priority", params.priority);
-    if (params?.resolution) query.set("resolution", params.resolution);
-    if (params?.companySlug) query.set("companySlug", params.companySlug);
-    else if (params?.companyId) query.set("companyId", params.companyId);
-    if (params?.from) query.set("from", params.from);
-    if (params?.to) query.set("to", params.to);
-    if (params?.limit) query.set("limit", String(params.limit));
-
-    const suffix = query.toString() ? `?${query.toString()}` : "";
-    const response = await rawFetch(`/api/insights/export/csv${suffix}`);
-    const blob = await response.blob();
-    triggerBlobDownload(blob, `insights-${new Date().toISOString().slice(0, 10)}.csv`);
+    const { blob, filename } = await apiFetchBlob(`/api/reports/export/insights.pdf${suffix}`);
+    triggerBlobDownload(blob, filename || `insights-${new Date().toISOString().slice(0, 10)}.pdf`);
   },
   async listChatThreads(limit = 20) {
     const raw = await apiFetch<any>(`/api/chat/threads?limit=${Math.max(1, Math.min(limit, 200))}`);
@@ -2035,7 +2118,14 @@ export const sentimentApi = {
     });
     return normalizeMention(raw);
   },
-  npsSubmit(payload: { session_id: string; score: number; comment?: string; module_key?: string; route?: string }) {
+  npsSubmit(payload: {
+    session_id: string;
+    score: number;
+    comment?: string;
+    module_key?: string;
+    route?: string;
+    context_metadata?: Record<string, unknown>;
+  }) {
     return apiFetch<{ ok: boolean }>("/api/nps/submit", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -2083,37 +2173,6 @@ export const sentimentApi = {
       }),
     };
   },
-  async metricsClassification(periodDays = 30): Promise<MetricsClassificationResponse> {
-    const safePeriod = Math.max(1, Math.min(365, Math.round(periodDays || 30)));
-    const raw = await apiFetch<any>(`/api/metrics/classification?period_days=${safePeriod}`);
-    const data = ensureObject(raw);
-
-    const topUrgencyFactors = normalizeNamedCounts(data.top_urgency_factors, ["factor", "name", "label"]).map((entry) => ({
-      factor: entry.name,
-      count: entry.count,
-    }));
-    const topNegativeAspects = normalizeNamedCounts(data.top_aspects_negative, ["aspect", "name", "key"]).map((entry) => ({
-      aspect: entry.name,
-      count: entry.count,
-    }));
-    const sourcesCoverage = normalizeNamedCounts(data.sources_coverage, ["source", "name", "key"]).map((entry) => ({
-      source: entry.name,
-      count: entry.count,
-    }));
-
-    return {
-      period_days: asNumber(data.period_days, safePeriod),
-      total_analyzed: Math.max(0, Math.round(asNumber(data.total_analyzed ?? data.total_mentions, 0))),
-      avg_urgency_score: normalizeUnitInterval(data.avg_urgency_score ?? data.avg_urgency ?? data.urgency_score),
-      avg_confidence: normalizeUnitInterval(data.avg_confidence ?? data.avg_confidence_score),
-      critical_mentions: Math.max(0, Math.round(asNumber(data.critical_mentions ?? data.critical_count, 0))),
-      by_sentiment: normalizeNumericRecord(data.by_sentiment),
-      by_criticality: normalizeNumericRecord(data.by_criticality),
-      top_urgency_factors: topUrgencyFactors.slice(0, 10),
-      top_aspects_negative: topNegativeAspects.slice(0, 10),
-      sources_coverage: sourcesCoverage,
-    };
-  },
   async metrics(params?: {
     company_id?: string;
     company_slug?: string;
@@ -2127,7 +2186,7 @@ export const sentimentApi = {
     if (params?.from) query.set("from", params.from);
     if (params?.to) query.set("to", params.to);
     if (typeof params?.period_days === "number" && Number.isFinite(params.period_days)) {
-      query.set("periodDays", String(Math.max(1, Math.min(Math.round(params.period_days), 365))));
+      query.set("period_days", String(Math.max(1, Math.min(Math.round(params.period_days), 365))));
     }
 
     const suffix = query.toString() ? `?${query.toString()}` : "";
@@ -2218,6 +2277,167 @@ export const sentimentApi = {
       message: asNullableString(data.message) ?? undefined,
     };
   },
+  // --- Ingestão: staging e commit para o primário (fluxo recomendado da doc) ---
+  async listIngestionBatches(limit = 20): Promise<{ items: IngestionBatch[] }> {
+    const safeLimit = Math.max(1, Math.min(Math.round(limit || 20), 100));
+    const raw = await apiFetch<any>(`/api/ingestion/batches?limit=${safeLimit}`);
+    const data = ensureObject(raw);
+    const rawItems = Array.isArray(raw) ? raw : ensureArray<any>(data.items);
+    return { items: rawItems.map(normalizeIngestionBatch) };
+  },
+  async getIngestionBatch(batchId: string): Promise<{ batch: IngestionBatch; recent_mentions: Mention[] }> {
+    const raw = await apiFetch<any>(`/api/ingestion/batches/${encodeURIComponent(batchId)}`);
+    const data = ensureObject(raw);
+    return {
+      batch: normalizeIngestionBatch(data.batch ?? data),
+      recent_mentions: ensureArray<any>(data.recent_mentions).map(normalizeMention),
+    };
+  },
+  async listStagingComments(params?: {
+    batch_id?: string;
+    company_id?: string;
+    company_slug?: string;
+    source?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<StagingCommentsResponse> {
+    const query = new URLSearchParams();
+    if (params?.batch_id) query.set("batch_id", params.batch_id);
+    if (params?.company_id) query.set("companyId", params.company_id);
+    if (params?.company_slug) query.set("companySlug", params.company_slug);
+    if (params?.source) query.set("source", params.source);
+    if (typeof params?.limit === "number" && Number.isFinite(params.limit)) {
+      query.set("limit", String(Math.max(1, Math.min(Math.round(params.limit), 1000))));
+    }
+    if (typeof params?.offset === "number" && Number.isFinite(params.offset)) {
+      query.set("offset", String(Math.max(0, Math.round(params.offset))));
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const raw = await apiFetch<any>(`/api/ingestion/staging/comments${suffix}`);
+    const data = ensureObject(raw);
+    return {
+      total: Math.max(0, Math.round(asNumber(data.total, 0))),
+      limit: asNumber(data.limit, 100),
+      offset: asNumber(data.offset, 0),
+      items: ensureArray<any>(data.items).map(normalizeStagingComment),
+    };
+  },
+  async commitStaging(payload: {
+    batch_id?: string;
+    staging_ids?: string[];
+    company_id?: string;
+    company_slug?: string;
+    source?: string;
+    limit?: number;
+  }): Promise<CommitResponse> {
+    const body: Record<string, unknown> = {};
+    if (payload.batch_id) body.batch_id = payload.batch_id;
+    if (payload.staging_ids && payload.staging_ids.length > 0) body.staging_ids = payload.staging_ids;
+    if (payload.company_id) body.companyId = payload.company_id;
+    if (payload.company_slug) body.companySlug = payload.company_slug;
+    if (payload.source) body.source = payload.source;
+    if (typeof payload.limit === "number" && Number.isFinite(payload.limit)) {
+      body.limit = Math.max(1, Math.round(payload.limit));
+    }
+
+    const raw = await apiFetch<any>("/api/ingestion/commit", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const data = ensureObject(raw);
+    return {
+      commit_id: asNullableString(data.commit_id) ?? null,
+      status: asNullableString(data.status),
+      selected: Math.max(0, Math.round(asNumber(data.selected, 0))),
+      inserted: Math.max(0, Math.round(asNumber(data.inserted, 0))),
+      committed_at: asNullableString(data.committed_at),
+      batch_id: asNullableString(data.batch_id),
+      company_slug: asNullableString(data.company_slug),
+      source: asNullableString(data.source),
+    };
+  },
+  // --- Alertas (standalone) ---
+  async alerts(params?: { search_id?: string }): Promise<AlertItem[]> {
+    const suffix = params?.search_id ? `?search_id=${encodeURIComponent(params.search_id)}` : "";
+    const raw = await apiFetch<any>(`/api/alerts${suffix}`);
+    const data = ensureObject(raw);
+    const rawItems = Array.isArray(raw) ? raw : ensureArray<any>(data.items || data.alerts || data.data);
+    return rawItems.map((item) => {
+      const rawItem = ensureObject(item);
+      return {
+        ...rawItem,
+        id: asString(rawItem.id || rawItem._id, "unknown"),
+      } as AlertItem;
+    });
+  },
+  // --- Sistema / diagnóstico ---
+  health(): Promise<HealthResponse> {
+    return apiFetch<HealthResponse>("/health");
+  },
+  integrationsStatus(): Promise<IntegrationStatusResponse> {
+    return apiFetch<IntegrationStatusResponse>("/api/status/integrations");
+  },
+  // --- Privacidade (LGPD) ---
+  getPrivacyPolicy(): Promise<Record<string, unknown>> {
+    return apiFetch<Record<string, unknown>>("/api/privacy/policy");
+  },
+  getPrivacyRights(): Promise<Record<string, unknown>> {
+    return apiFetch<Record<string, unknown>>("/api/privacy/rights");
+  },
+  getConsent(sessionId?: string): Promise<Record<string, unknown>> {
+    const suffix = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
+    return apiFetch<Record<string, unknown>>(`/api/privacy/consent${suffix}`);
+  },
+  getPrivacyExportSummary(): Promise<Record<string, unknown>> {
+    return apiFetch<Record<string, unknown>>("/api/privacy/export-summary");
+  },
+  // --- Administração (somente role admin) ---
+  async adminUsers(params?: { limit?: number; skip?: number }): Promise<AdminUser[]> {
+    const query = new URLSearchParams();
+    if (typeof params?.limit === "number") query.set("limit", String(Math.max(1, Math.round(params.limit))));
+    if (typeof params?.skip === "number") query.set("skip", String(Math.max(0, Math.round(params.skip))));
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const raw = await apiFetch<any>(`/api/admin/users${suffix}`);
+    const data = ensureObject(raw);
+    const rawItems = Array.isArray(raw) ? raw : ensureArray<any>(data.items || data.users || data.data);
+    return rawItems.map((item) => {
+      const rawItem = ensureObject(item);
+      return { ...rawItem, id: asString(rawItem.id || rawItem._id, "unknown") } as AdminUser;
+    });
+  },
+  async adminAuditLogs(params?: { action?: string; limit?: number; skip?: number }): Promise<AdminAuditLog[]> {
+    const query = new URLSearchParams();
+    if (params?.action) query.set("action", params.action);
+    if (typeof params?.limit === "number") query.set("limit", String(Math.max(1, Math.round(params.limit))));
+    if (typeof params?.skip === "number") query.set("skip", String(Math.max(0, Math.round(params.skip))));
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const raw = await apiFetch<any>(`/api/admin/audit-logs${suffix}`);
+    const data = ensureObject(raw);
+    const rawItems = Array.isArray(raw) ? raw : ensureArray<any>(data.items || data.logs || data.data);
+    return rawItems.map((item) => {
+      const rawItem = ensureObject(item);
+      return { ...rawItem, id: asString(rawItem.id || rawItem._id, "unknown") } as AdminAuditLog;
+    });
+  },
+  adminSystemStats(): Promise<AdminSystemStats> {
+    return apiFetch<AdminSystemStats>("/api/admin/system-stats");
+  },
+  adminToggleUserActive(targetUserId: string): Promise<{ ok: boolean; is_active?: boolean }> {
+    return apiFetch<{ ok: boolean; is_active?: boolean }>(
+      `/api/admin/users/${encodeURIComponent(targetUserId)}/toggle-active`,
+      { method: "POST" }
+    );
+  },
+  async adminAlerts(params?: { severity?: string }): Promise<AlertItem[]> {
+    const suffix = params?.severity ? `?severity=${encodeURIComponent(params.severity)}` : "";
+    const raw = await apiFetch<any>(`/api/admin/alerts${suffix}`);
+    const data = ensureObject(raw);
+    const rawItems = Array.isArray(raw) ? raw : ensureArray<any>(data.items || data.alerts || data.data);
+    return rawItems.map((item) => {
+      const rawItem = ensureObject(item);
+      return { ...rawItem, id: asString(rawItem.id || rawItem._id, "unknown") } as AlertItem;
+    });
+  },
   privacyConsent(payload: PrivacyConsentPayload) {
     const preferences = payload.consent;
     const analytics =
@@ -2270,12 +2490,21 @@ export const sentimentApi = {
   },
 };
 
+// Mapeia (formato + fonte) para o caminho oficial de export documentado.
+// Contrato: /api/reports/export/{mentions.csv,dashboard.pdf,insights.pdf,metrics.pdf}.
+function resolveReportExportPath(format: "csv" | "pdf", source?: string): string {
+  if (format === "csv") return "mentions.csv";
+  const normalized = (source || "dashboard").toLowerCase();
+  if (normalized === "metrics") return "metrics.pdf";
+  if (normalized === "insights") return "insights.pdf";
+  return "dashboard.pdf";
+}
+
 export async function downloadReport(
   format: "csv" | "pdf",
   params?: {
     source?: string;
     filename?: string;
-    search_id?: string;
     company_id?: string;
     company_slug?: string;
     from?: string;
@@ -2283,15 +2512,14 @@ export async function downloadReport(
   }
 ) {
   const query = new URLSearchParams();
-  if (params?.search_id) query.set("search_id", params.search_id);
-  if (params?.source) query.set("source", params.source);
   if (params?.company_id) query.set("companyId", params.company_id);
   if (params?.company_slug) query.set("companySlug", params.company_slug);
   if (params?.from) query.set("from", params.from);
   if (params?.to) query.set("to", params.to);
 
+  const exportPath = resolveReportExportPath(format, params?.source);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const { blob, filename } = await apiFetchBlob(`/api/reports/export/${format}${suffix}`);
+  const { blob, filename } = await apiFetchBlob(`/api/reports/export/${exportPath}${suffix}`);
   const resolvedFilename =
     filename ||
     params?.filename ||
@@ -2299,18 +2527,4 @@ export async function downloadReport(
   triggerBlobDownload(blob, resolvedFilename);
 }
 
-export async function downloadInsightsReport(
-  format: "markdown" | "pdf",
-  params?: { priority?: string; resolution?: string; limit?: number }
-) {
-  const query = new URLSearchParams();
-  if (params?.priority) query.set("priority", params.priority);
-  if (params?.resolution) query.set("resolution", params.resolution);
-  if (params?.limit) query.set("limit", String(params.limit));
-
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  const { blob, filename } = await apiFetchBlob(`/api/insights/export/${format}${suffix}`);
-  const resolvedFilename = filename || (format === "markdown" ? "insights.md" : "insights.pdf");
-  triggerBlobDownload(blob, resolvedFilename);
-}
 

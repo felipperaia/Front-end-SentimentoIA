@@ -56,22 +56,22 @@ export function PrivacyPolicyDialog({
     () => [
       {
         key: "cookies_estritamente_necessarios" as const,
-        label: "Cookies estritamente necessarios",
+        label: "Cookies estritamente necessários",
         description:
-          "Mantem autenticacao, seguranca da sessao e funcionamento basico da plataforma.",
+          "Mantém autenticação, segurança da sessão e funcionamento básico da plataforma.",
         disabled: true,
       },
       {
         key: "cookies_analiticos" as const,
-        label: "Cookies analiticos",
+        label: "Cookies analíticos",
         description:
-          "Ajudam a medir uso da aplicacao para melhorar performance e usabilidade.",
+          "Ajudam a medir uso da aplicação para melhorar performance e usabilidade.",
       },
       {
         key: "cookies_personalizacao" as const,
-        label: "Cookies de personalizacao",
+        label: "Cookies de personalização",
         description:
-          "Permitem adaptar experiencia, atalhos e preferencias de exibicao.",
+          "Permitem adaptar experiência, atalhos e preferências de exibição.",
       },
       {
         key: "cookies_treinamento_ia" as const,
@@ -91,9 +91,9 @@ export function PrivacyPolicyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Politicas de privacidade e cookies</DialogTitle>
+          <DialogTitle>Políticas de privacidade e cookies</DialogTitle>
           <DialogDescription>
-            Revise como os dados sao tratados e escolha suas preferencias de
+            Revise como os dados são tratados e escolha suas preferências de
             consentimento de cookies.
           </DialogDescription>
         </DialogHeader>
@@ -101,18 +101,18 @@ export function PrivacyPolicyDialog({
         <div className="space-y-5">
           <div className="max-h-56 space-y-3 overflow-y-auto rounded-md border border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
             <p>
-              A Sentimento AI processa dados para autenticacao, seguranca,
-              analise de reputacao e geracao de insights. O tratamento respeita
-              os principios da LGPD, com minimizacao, finalidade e seguranca.
+              A Sentimento AI processa dados para autenticação, segurança,
+              análise de reputação e geração de insights. O tratamento respeita
+              os princípios da LGPD, com minimização, finalidade e segurança.
             </p>
             <p>
-              Cookies estritamente necessarios sao obrigatorios para manter
-              sessao autenticada e recursos essenciais. Os demais cookies sao
+              Cookies estritamente necessários são obrigatórios para manter
+              sessão autenticada e recursos essenciais. Os demais cookies são
               opcionais e podem ser ajustados a qualquer momento.
             </p>
             <p>
-              Para solicitacoes de acesso, correcao ou exclusao de dados,
-              utilize as opcoes de gerenciamento na area de configuracoes da
+              Para solicitações de acesso, correção ou exclusão de dados,
+              utilize as opções de gerenciamento na área de configurações da
               conta.
             </p>
           </div>
@@ -169,7 +169,7 @@ export function PrivacyPolicyDialog({
             }}
             disabled={saving}
           >
-            {saving ? "Salvando..." : "Salvar preferencias"}
+            {saving ? "Salvando..." : "Salvar preferências"}
           </button>
         </DialogFooter>
       </DialogContent>

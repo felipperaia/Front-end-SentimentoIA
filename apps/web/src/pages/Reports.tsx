@@ -79,7 +79,7 @@ export default function ReportsPage() {
       });
       setItems(response.items || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar relatorios.");
+      setError(err instanceof Error ? err.message : "Erro ao carregar relatórios.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -88,7 +88,7 @@ export default function ReportsPage() {
 
   async function handleDownload(action: ExportAction) {
     if (!hasRequiredFilters) {
-      toast.error("Selecione empresa e periodo antes de exportar.");
+      toast.error("Selecione empresa e período antes de exportar.");
       return;
     }
 
@@ -117,8 +117,8 @@ export default function ReportsPage() {
           source: action === "pdf-dashboard" ? "dashboard" : "metrics",
           filename:
             action === "pdf-dashboard"
-              ? `dashboard-apresentacao-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`
-              : `metricas-apresentacao-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`,
+              ? `dashboard-apresentação-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`
+              : `métricas-apresentação-${selectedCompanySlug}-${fromDate}-${toDate}.pdf`,
         });
       }
     } catch (err) {
@@ -141,18 +141,18 @@ export default function ReportsPage() {
   }, [hasRequiredFilters, selectedCompanySlug, fromDate, toDate, limit]);
 
   const selectedCompanyName = useMemo(
-    () => companies.find((company) => company.slug === selectedCompanySlug)?.name || "Nao selecionada",
+    () => companies.find((company) => company.slug === selectedCompanySlug)?.name || "Não selecionada",
     [companies, selectedCompanySlug]
   );
   const hasCompanySelected = selectedCompanySlug.length > 0;
 
   let reportsContent: ReactNode;
   if (loading) {
-    reportsContent = <p className="mt-4 text-sm text-muted-foreground">Carregando relatorios...</p>;
+    reportsContent = <p className="mt-4 text-sm text-muted-foreground">Carregando relatórios...</p>;
   } else if (items.length === 0) {
     reportsContent = (
       <p className="mt-4 text-sm text-muted-foreground">
-        Nenhum relatorio encontrado para os filtros selecionados.
+        Nenhum relatório encontrado para os filtros selecionados.
       </p>
     );
   } else {
@@ -161,7 +161,7 @@ export default function ReportsPage() {
         <table className="min-w-full text-left text-sm">
           <thead>
             <tr className="border-b border-border/70 text-muted-foreground">
-              <th className="px-3 py-2">Empresa - Periodo</th>
+              <th className="px-3 py-2">Empresa - Período</th>
               <th className="px-3 py-2">Criado em</th>
               <th className="px-3 py-2">Formato</th>
             </tr>
@@ -189,8 +189,8 @@ export default function ReportsPage() {
       title={t("reports.title")}
       subtitle={
         hasRequiredFilters
-          ? "Relatorios por empresa e periodo com exportacoes para dados brutos e apresentacoes."
-          : "Selecione empresa e periodo para habilitar relatorios e exportacao."
+          ? "Relatórios por empresa e período com exportações para dados brutos e apresentações."
+          : "Selecione empresa e período para habilitar relatórios e exportação."
       }
       actions={
         <button
@@ -204,7 +204,7 @@ export default function ReportsPage() {
       }
     >
       <section className="mb-5 app-panel p-5">
-        <h2 className="panel-title">Filtros de relatorio</h2>
+        <h2 className="panel-title">Filtros de relatório</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Empresa atual: <span className="font-semibold text-foreground">{selectedCompanyName}</span>
         </p>
@@ -237,7 +237,7 @@ export default function ReportsPage() {
           </label>
 
           <label className="flex items-center gap-2">
-            <span className="text-muted-foreground">Ate:</span>
+            <span className="text-muted-foreground">Até:</span>
             <input
               type="date"
               className="field-input h-9 py-1"
@@ -260,10 +260,10 @@ export default function ReportsPage() {
             />
           </label>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:col-span-2 xl:col-span-5">
             <button
               type="button"
-              className="primary-btn"
+              className="primary-btn w-full justify-center"
               disabled={activeExport !== null}
               onClick={() => void handleDownload("csv-raw")}
             >
@@ -273,7 +273,7 @@ export default function ReportsPage() {
 
             <button
               type="button"
-              className="secondary-btn"
+              className="secondary-btn w-full justify-center"
               disabled={activeExport !== null}
               onClick={() => void handleDownload("pdf-dashboard")}
             >
@@ -283,7 +283,7 @@ export default function ReportsPage() {
 
             <button
               type="button"
-              className="secondary-btn"
+              className="secondary-btn w-full justify-center"
               disabled={activeExport !== null}
               onClick={() => void handleDownload("pdf-insights")}
             >
@@ -293,19 +293,19 @@ export default function ReportsPage() {
 
             <button
               type="button"
-              className="secondary-btn"
+              className="secondary-btn w-full justify-center"
               disabled={activeExport !== null}
               onClick={() => void handleDownload("pdf-metrics")}
             >
               <FileText size={16} />
-              <span>{activeExport === "pdf-metrics" ? t("common.processing") : "PDF Metricas"}</span>
+              <span>{activeExport === "pdf-metrics" ? t("common.processing") : "PDF Métricas"}</span>
             </button>
           </div>
         </div>
 
         <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
-          <p>CSV bruto: exporta os dados captados no periodo filtrado para uso analitico.</p>
-          <p>PDFs de apresentacao: dashboard, insights e metricas prontos para compartilhamento executivo.</p>
+          <p>CSV bruto: exporta os dados captados no período filtrado para uso analítico.</p>
+          <p>PDFs de apresentação: dashboard, insights e métricas prontos para compartilhamento executivo.</p>
         </div>
       </section>
 
@@ -317,7 +317,7 @@ export default function ReportsPage() {
 
       {hasCompanySelected ? null : (
         <section className="app-panel mb-5 p-8 text-center">
-          <p className="text-base font-semibold">Selecione uma empresa para carregar relatorios</p>
+          <p className="text-base font-semibold">Selecione uma empresa para carregar relatórios</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Sem empresa selecionada, nenhuma leitura pesada e executada.
           </p>
@@ -326,7 +326,7 @@ export default function ReportsPage() {
 
       {hasCompanySelected ? (
       <section className="app-panel p-5 md:p-6">
-        <h2 className="panel-title">Relatorios disponiveis</h2>
+        <h2 className="panel-title">Relatórios disponíveis</h2>
         {reportsContent}
       </section>
       ) : null}

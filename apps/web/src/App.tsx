@@ -21,6 +21,10 @@ const AnalysisPage = lazy(() => import("./pages/Analysis"));
 const MetricsPage = lazy(() => import("./pages/Metrics"));
 const ReportsPage = lazy(() => import("./pages/Reports"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
+const PrivacyCenter = lazy(() => import("./pages/PrivacyCenter"));
+const AlertsPage = lazy(() => import("./pages/Alerts"));
+const DiagnosticsPage = lazy(() => import("./pages/Diagnostics"));
+const AdminPage = lazy(() => import("./pages/Admin"));
 const MFAVerify = lazy(() => import("./pages/MFAVerify"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -43,6 +47,10 @@ function Router() {
       <Route path="/metrics">{() => <ProtectedRoute><MetricsPage /></ProtectedRoute>}</Route>
       <Route path="/reports">{() => <ProtectedRoute><ReportsPage /></ProtectedRoute>}</Route>
       <Route path="/settings">{() => <ProtectedRoute><SettingsPage /></ProtectedRoute>}</Route>
+      <Route path="/privacy">{() => <ProtectedRoute><PrivacyCenter /></ProtectedRoute>}</Route>
+      <Route path="/alerts">{() => <ProtectedRoute><AlertsPage /></ProtectedRoute>}</Route>
+      <Route path="/diagnostics">{() => <ProtectedRoute><DiagnosticsPage /></ProtectedRoute>}</Route>
+      <Route path="/admin">{() => <ProtectedRoute><AdminPage /></ProtectedRoute>}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
